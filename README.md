@@ -1,29 +1,84 @@
-## Tech used
+# Lando Curb
 
-- All the graphics are SVG-based, with CSS transitions and transforms. There is no canvas, and there are no asset files. It's HTML-CSS-SVG-in-JS all the way down.
-- [Kontra.js](https://straker.github.io/kontra/) game engine
+A tiny traffic-puzzle game about drawing streets, connecting homes, and keeping impatient commuters from turning the neighborhood into a parking lot.
+
+Build roads between garages and houses, spend your limited path tiles wisely, and adapt as the map fills up with new demand. The whole game runs in the browser as a static Vite app.
+
+## Play
+
+Once GitHub Pages has finished deploying, the game should be available at:
+
+https://landostock.github.io/lando-curb/
+
+## How To Play
+
+Drag from a garage or existing road tile to draw streets toward houses. Connected houses can receive commuters. Better routes mean happier drivers, but every road tile costs space from your limited inventory.
+
+You can pause to think, remove roads when your plan changes, and use diagonals to stretch your road budget further.
+
+## Features
+
+- SVG-based rendering with smooth browser-native transforms
+- Procedural map generation
+- Road drawing and removal
+- Commuter spawning, routing, and traffic behavior
+- Upgrade and game-over flow
+- Adaptive background music and synthesized sound effects
+
+## Tech
+
 - [Vite](https://vitejs.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Kontra.js](https://straker.github.io/kontra/)
+- SVG, CSS transitions, and browser audio APIs
 
-## Essential Commands
+## Local Development
 
-Run dev command to start up hot-reloading with [Vite](https://vitejs.dev/) at [localhost:3000](http://localhost:3000/)
-`npm run dev`
+Install dependencies:
 
-## How to play
+```bash
+npm install
+```
 
-Touch or left click and drag to build roads between garages and houses to keep the drivers happy!
+Start the local dev server:
 
-## Tips & Tricks
+```bash
+npm run dev
+```
 
-<details>
-<summary>(Click to show - minor spoilers)</summary>
-<p>
-  <ul>
-    <li>You can build roads while the game is paused, if you need a little more time to think.</li>
-    <li>You can delete the road that comes with the starting garage!</li>
-    <li>Distance is the most important factor when determining how well a house can cope with a garage's demands.</li>
-    <li>You don't have to connect every house!</li>
-    <li>Diagonal roads use fewer road tiles to go a further distance, but because they are further, it will take drivers longer to get to their destinations for the same number of grid-cells traversed.</li>
-  <ul>
-</p>
-</details>
+Build the static site:
+
+```bash
+npm run build
+```
+
+Preview the production build:
+
+```bash
+npm run preview
+```
+
+## Deployment
+
+This repo includes a GitHub Actions workflow for GitHub Pages. Every push to `main` builds the game and deploys the `dist/` output.
+
+## Versioning
+
+Stable milestones can be tagged in Git, for example:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+To inspect previous versions:
+
+```bash
+git log --oneline
+```
+
+## Rights
+
+Copyright (c) 2026 Lando Stock. All rights reserved.
+
+This repository is public for hosting and portfolio purposes. No permission is granted to copy, modify, distribute, reuse, or repackage the code, music, or other assets without written permission.
