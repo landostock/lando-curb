@@ -288,6 +288,7 @@ export interface ParkProps {
   relativePathPoints: Array<Point & { locked: boolean }>;
   delay: number;
   parkingCapacity: number;
+  silentAppearChime?: boolean;
 }
 
 export interface HouseProps {
@@ -329,6 +330,7 @@ interface CycleAction {
 let cycleActions: CycleAction[] = [];
 let houseFailed = false;
 let houseRetryPhases: number[] = [];
+let starterHouseSpawned = false;
 
 export const getSpawningTelemetry = () => ({
   loopLength: spawningLoopLength,
@@ -456,6 +458,7 @@ const placePark = ({
   parkingCapacity,
   delay,
   maxNumAttempts,
+  silentAppearChime,
 }: {
   shape: ParkShape;
   anchorTypes: readonly string[];
@@ -464,6 +467,7 @@ const placePark = ({
   parkingCapacity: number;
   delay: number;
   maxNumAttempts: number;
+  silentAppearChime?: boolean;
 }): boolean => {
   const pos = getRandomPosition({
     width: shape.width,
@@ -487,6 +491,7 @@ const placePark = ({
     relativePathPoints: shape.relativePathPoints,
     delay,
     parkingCapacity,
+    silentAppearChime,
   });
   pruneTreesUnderNewestPark();
   return true;
@@ -607,6 +612,21 @@ const trySpawnHouseNearBusinessPark = (): boolean => {
   return trySpawnHouse(houseType, bp, 3, houseMaxDistance());
 };
 
+export const spawnStarterHouse = (delay = 1800): void => {
+  if (starterHouseSpawned) return;
+  const bp = businessParks[0];
+  if (!bp) return;
+  starterHouseSpawned = true;
+  setTimeout(() => {
+    if (!businessParks.includes(bp)) return;
+    if (houses.some((house) => bp.hasType(house.type))) return;
+    if (!trySpawnHouse(bp.type, bp, 2, 4)) {
+      starterHouseSpawned = false;
+      trySpawnHouseNearBusinessPark();
+    }
+  }, delay);
+};
+
 const trySpawnHouseNearFriend = (): boolean => {
   if (!businessParks.length) return false;
 
@@ -689,20 +709,23 @@ export const resetSpawning = (): void => {
   houseStylePicker = () => undefined;
   houseFailed = false;
   houseRetryPhases = [];
+  starterHouseSpawned = false;
   buildCyclePlan(1);
 };
 
 export const spawnFirstBusinessPark = (delay: number): void => {
   const first = activeConfig.parkTypes[0];
   if (!first) return;
-  placePark({
+  const placed = placePark({
     shape: singleParkShape(),
     anchorTypes: [first.color],
     borderColor: first.color,
     parkingCapacity: first.parkingCapacity,
     delay,
     maxNumAttempts: 32,
+    silentAppearChime: delay >= 1000,
   });
+  if (placed && delay === 0) spawnStarterHouse();
 };
 
 /** Run a house-spawn attempt and schedule retries if it failed. */

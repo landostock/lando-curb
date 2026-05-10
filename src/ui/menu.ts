@@ -9,10 +9,8 @@ import {
 } from "../logic/generate-map";
 import { gameoverWrapper } from "./gameover";
 import {
-  gridRedToggleButton,
-  gridRedToggleTooltip,
-  gridToggleButton,
   gridToggleTooltip,
+  setGameplayControlsVisible,
   uiContainer,
 } from "./ui";
 
@@ -166,7 +164,9 @@ export const showMenu = (
 
   // Buttons become interactive once fully visible (last fades in at 0.5s + 1.4s delay).
   clearTimeout(pointerEventsTimer);
-  pointerEventsTimer = setTimeout(() => { menuWrapper.style.pointerEvents = ""; }, 1900);
+  pointerEventsTimer = setTimeout(() => {
+    menuWrapper.style.pointerEvents = "";
+  }, 1900);
 
   // First time the game is loaded, the menu background needs to be fast
   if (firstTime) {
@@ -178,7 +178,9 @@ export const showMenu = (
     ostholsteinButtonWrapper.style.transition = `opacity .5s .8s`;
     menuText1.style.transition = `opacity .5s 1s`;
     clearTimeout(pointerEventsTimer);
-    pointerEventsTimer = setTimeout(() => { menuWrapper.style.pointerEvents = ""; }, 1300);
+    pointerEventsTimer = setTimeout(() => {
+      menuWrapper.style.pointerEvents = "";
+    }, 1300);
   }
 
   const highscore = localStorage.getItem("Lando Curb");
@@ -202,6 +204,8 @@ export const showMenu = (
   startButtonWrapper.style.opacity = "1";
   berlinButtonWrapper.style.opacity = "1";
   ostholsteinButtonWrapper.style.opacity = "1";
+  gridToggleTooltip.style.opacity = "0";
+  setGameplayControlsVisible(false);
 };
 
 export const hideMenu = (): void => {
@@ -230,20 +234,19 @@ export const hideMenu = (): void => {
   // a stacking context that interferes with game element z-ordering.
   menuBackground.addEventListener(
     "transitionend",
-    () => { if (menuBackground.style.opacity === "0") menuBackground.style.display = "none"; },
+    () => {
+      if (menuBackground.style.opacity === "0")
+        menuBackground.style.display = "none";
+    },
     { once: true },
   );
 
-  gridRedToggleTooltip.style.opacity = "0";
   gridToggleTooltip.style.opacity = "0";
-  gridRedToggleTooltip.style.width = "0";
   gridToggleTooltip.style.width = "0";
 
   svgElement.style.transition = `transform 2s`;
   svgElement.style.transform = "";
 
-  gridRedToggleTooltip.style.transition = `all .5s`;
   gridToggleTooltip.style.transition = `all .5s`;
-  gridRedToggleButton.style.opacity = "1";
-  gridToggleButton.style.opacity = "1";
+  setGameplayControlsVisible(false);
 };

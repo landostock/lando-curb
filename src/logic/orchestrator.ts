@@ -15,6 +15,7 @@ import {
   pauseButton,
   resetUpgradeCharge,
   scoreCounters,
+  setGameplayControlsVisible,
   setUpgradeCharge,
 } from "../ui/ui";
 import { showUpgradePicker } from "../ui/upgrades";
@@ -23,10 +24,7 @@ import { updateTrafficGrid } from "./commuter-spatial-index";
 import { tickDemandBudgets } from "./demand-budget";
 import { updateGridData } from "./find-route";
 import { cleanupPendingStreets } from "./remove-street";
-import {
-  getSpawningConfig,
-  spawnNewObjects,
-} from "./spawning";
+import { getSpawningConfig, spawnNewObjects } from "./spawning";
 import { TIMING } from "./timing";
 
 /** Structural handle for the game loop — decouples this module from kontra. */
@@ -62,6 +60,7 @@ const revealHudMilestones = (tick: number): void => {
   if (tick === TIMING.hud.inventory) {
     pathTilesIndicator.style.opacity = "1";
     motorwayIndicator.style.opacity = "1";
+    setGameplayControlsVisible(true);
   }
   if (tick === TIMING.hud.clock) clock.style.opacity = "1";
   if (tick === TIMING.hud.pause) pauseButton.style.opacity = "1";

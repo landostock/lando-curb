@@ -16,6 +16,7 @@ import {
   getRandomPosition,
   setHouseStylePicker,
   spawnFirstBusinessPark,
+  spawnStarterHouse,
 } from "./spawning";
 
 export const generateRandomMap = (delay: number): void => {
@@ -144,8 +145,10 @@ export const generateBerlinMap = (delay: number): void => {
         { x: 3, y: 1, locked: true },
       ],
       delay,
+      silentAppearChime: delay >= 1000,
     }),
   );
+  if (delay === 0) spawnStarterHouse();
 
   // Second business park — "Potsdamer Platz" (blue, center)
   // 2×3 portrait, entry bottom → parking = 2×1 strip on bottom, building = 2×2 on top
@@ -160,7 +163,8 @@ export const generateBerlinMap = (delay: number): void => {
         { x: 0, y: 2, locked: true },
         { x: 0, y: 3, locked: true },
       ],
-      delay: delay + 3000,
+      delay: delay + 14000,
+      silentAppearChime: delay >= 1000,
     }),
   );
 };

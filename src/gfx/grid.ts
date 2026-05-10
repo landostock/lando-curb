@@ -1,6 +1,6 @@
 import { board } from "../board";
 import { colors } from "./colors";
-import { gridSvgHeight, gridSvgWidth, svgElement } from "./svg";
+import { svgElement } from "./svg";
 import { createSvgElement, gridCellSize } from "./svg-utils";
 
 export const scaledGridLineThickness = 1;
@@ -8,7 +8,7 @@ export const gridLineThickness = scaledGridLineThickness / 2;
 
 export const gridRect = createSvgElement("rect");
 export const gridRectRed = createSvgElement("rect");
-const lockedOverlay = createSvgElement("path");
+const boardFill = createSvgElement("rect");
 
 const boardSvgRect = () => ({
   x: board.x * gridCellSize - gridLineThickness / 2,
@@ -25,18 +25,17 @@ export const updateGridBounds = (): void => {
     el.setAttribute("width", String(w));
     el.setAttribute("height", String(h));
   }
-  lockedOverlay.setAttribute(
-    "d",
-    `M0 0h${gridSvgWidth}v${gridSvgHeight}H0Z` + `M${x} ${y}h${w}v${h}H${x}Z`,
-  );
+  boardFill.setAttribute("x", String(x));
+  boardFill.setAttribute("y", String(y));
+  boardFill.setAttribute("width", String(w));
+  boardFill.setAttribute("height", String(h));
 };
 
 export const addGridBackgroundToSvg = (): void => {
-  const bg = createSvgElement("rect");
-  bg.setAttribute("fill", colors.grass);
-  bg.setAttribute("width", String(gridSvgWidth));
-  bg.setAttribute("height", String(gridSvgHeight));
-  svgElement.append(bg);
+  boardFill.setAttribute("fill", colors.grass);
+  boardFill.style.transition = "x .5s, y .5s, width .5s, height .5s";
+  updateGridBounds();
+  svgElement.append(boardFill);
 };
 
 export const addGridToSvg = (): void => {
@@ -59,19 +58,6 @@ export const addGridToSvg = (): void => {
   addCellPattern("grid", colors.grid);
   addCellPattern("gridred", colors.gridRed);
 
-  const lockedPattern = createSvgElement("pattern");
-  lockedPattern.setAttribute("id", "locked");
-  lockedPattern.setAttribute("width", "6");
-  lockedPattern.setAttribute("height", "6");
-  lockedPattern.setAttribute("patternUnits", "userSpaceOnUse");
-  lockedPattern.setAttribute("patternTransform", "rotate(-55)");
-  const stripe = createSvgElement("rect");
-  stripe.setAttribute("width", "3");
-  stripe.setAttribute("height", "6");
-  stripe.setAttribute("fill", "#0001");
-  lockedPattern.append(stripe);
-  defs.append(lockedPattern);
-
   const initGridRect = (el: SVGElement, fill: string) => {
     el.setAttribute("fill", fill);
     el.style.opacity = "0";
@@ -81,10 +67,6 @@ export const addGridToSvg = (): void => {
   initGridRect(gridRect, "url(#grid)");
   initGridRect(gridRectRed, "url(#gridred)");
 
-  lockedOverlay.setAttribute("fill", "url(#locked)");
-  lockedOverlay.setAttribute("fill-rule", "evenodd");
-  lockedOverlay.style.transition = "d .5s";
-
   updateGridBounds();
-  svgElement.append(defs, lockedOverlay, gridRect, gridRectRed);
+  svgElement.append(defs, gridRect, gridRectRed);
 };

@@ -2,13 +2,20 @@ import { grid } from "../board";
 import { getBoardCell, isPastHalfwayInto } from "../gfx/coords";
 import { gridPointerLayer } from "../gfx/layers";
 import { svgContainerElement, svgElement } from "../gfx/svg";
+import { upgradeStreetToMotorway } from "../logic/motorway-upgrade";
 import {
   cellInLake,
   cellIsBlocked,
   houseInCell,
 } from "../logic/placement-obstacles";
 import { removePath } from "../logic/remove-street";
+import { session, streets } from "../state";
 import type { Cell, Pixel } from "../types";
+import {
+  motorwayIndicator,
+  motorwayIndicatorCount,
+  motorwayMode,
+} from "../ui/ui";
 import { isAdjacent } from "../util/geometry";
 import { initCarClick } from "./car-click";
 import {
@@ -55,6 +62,100 @@ const getCellFromEvent = (event: PointerEvent) => {
   return { cell: getBoardCell(pointerInRect), pointerInRect };
 };
 
+const edgeFromPointer = (cell: Cell, pointerInRect: Pixel): [Cell, Cell] => {
+  const c = gridPointerLayer.getBoundingClientRect().width / grid.width;
+  const centerX = c * (cell.x + 0.5);
+  const centerY = c * (cell.y + 0.5);
+  const dx = pointerInRect.x - centerX;
+  const dy = pointerInRect.y - centerY;
+  const neighbor =
+    Math.abs(dx) > Math.abs(dy)
+      ? ({ x: cell.x + Math.sign(dx || 1), y: cell.y } as Cell)
+      : ({ x: cell.x, y: cell.y + Math.sign(dy || 1) } as Cell);
+  return [cell, neighbor];
+};
+
+const cellCenterInRect = (cell: Cell): Pixel => {
+  const c = gridPointerLayer.getBoundingClientRect().width / grid.width;
+  return {
+    x: c * (cell.x + 0.5),
+    y: c * (cell.y + 0.5),
+  } as Pixel;
+};
+
+const distanceToSegmentSquared = (
+  point: Pixel,
+  start: Pixel,
+  end: Pixel,
+): number => {
+  const vx = end.x - start.x;
+  const vy = end.y - start.y;
+  const wx = point.x - start.x;
+  const wy = point.y - start.y;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2)) : 0;
+  const px = start.x + vx * t;
+  const py = start.y + vy * t;
+  return (point.x - px) ** 2 + (point.y - py) ** 2;
+};
+
+const nearestRemovableStreetEdge = (
+  cell: Cell,
+  pointerInRect: Pixel,
+): [Cell, Cell] | undefined => {
+  const c = gridPointerLayer.getBoundingClientRect().width / grid.width;
+  const maxDistance2 = (c * 0.34) ** 2;
+  let best: { points: [Cell, Cell]; distance2: number } | undefined;
+
+  for (const street of streets) {
+    if (street.points[0].locked || street.points[1].locked) continue;
+    if (
+      street.points.every(
+        (p) => Math.abs(p.x - cell.x) > 1 || Math.abs(p.y - cell.y) > 1,
+      )
+    )
+      continue;
+
+    const distance2 = distanceToSegmentSquared(
+      pointerInRect,
+      cellCenterInRect(street.points[0]),
+      cellCenterInRect(street.points[1]),
+    );
+    if (distance2 > maxDistance2) continue;
+    if (!best || distance2 < best.distance2) {
+      best = { points: street.points, distance2 };
+    }
+  }
+
+  return best?.points;
+};
+
+const removePathAtPointer = (cell: Cell, pointerInRect: Pixel): void => {
+  const edge = nearestRemovableStreetEdge(cell, pointerInRect);
+  if (edge) removePath(edge[0], edge[1]);
+  else removePath(cell);
+};
+
+const flashMotorwayExhausted = (): void => {
+  motorwayIndicator.style.scale = "1.1";
+  motorwayIndicatorCount.innerText = "!";
+  setTimeout(() => {
+    motorwayIndicator.style.scale = "1";
+    motorwayIndicatorCount.innerText = String(session.motorways);
+  }, 300);
+};
+
+const handleDoubleClick = (event: MouseEvent): void => {
+  if (!motorwayMode) return;
+  event.stopImmediatePropagation();
+  event.preventDefault();
+
+  const { cell, pointerInRect } = getCellFromEvent(event as PointerEvent);
+  const [from, to] = edgeFromPointer(cell, pointerInRect);
+  const result = upgradeStreetToMotorway(from, to);
+  if (result === "exhausted") flashMotorwayExhausted();
+};
+
 const handlePointerdown = (event: PointerEvent): void => {
   event.stopPropagation();
 
@@ -71,7 +172,7 @@ const handlePointerdown = (event: PointerEvent): void => {
   lastPointerdownY = event.clientY;
   if (isSecondClick) return;
 
-  const { cell } = getCellFromEvent(event);
+  const { cell, pointerInRect } = getCellFromEvent(event);
 
   if (event.buttons === 1 && !gridRedState.locked) {
     gridShow();
@@ -89,7 +190,7 @@ const handlePointerdown = (event: PointerEvent): void => {
     }
   } else if (event.buttons === 2 || gridRedState.locked) {
     gridRedShow();
-    removePath(cell);
+    removePathAtPointer(cell, pointerInRect);
     removeDragPrev = cell;
   }
 };
@@ -202,5 +303,6 @@ export const initPointer = (): void => {
   gridPointerLayer.addEventListener("pointerdown", handlePointerdown);
   gridPointerLayer.addEventListener("pointermove", handlePointermove);
   gridPointerLayer.addEventListener("pointerup", handlePointerup);
+  gridPointerLayer.addEventListener("dblclick", handleDoubleClick);
   initCarClick();
 };

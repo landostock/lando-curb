@@ -4,12 +4,11 @@ import { commuters, session, streets } from "../state";
 import type { Cell } from "../types";
 import {
   bridgeIndicator,
-  bridgeIndicatorCount,
-  motorwayIndicatorCount,
-  pathTilesIndicatorCount,
+  developerMode,
+  updateInventoryCounters,
 } from "../ui/ui";
 import { isAdjacent } from "../util/geometry";
-import { findRoute, streetMatchesEdge } from "./find-route";
+import { findRoute, routeUsesStreet, streetMatchesEdge } from "./find-route";
 import { commitStreetChanges } from "./orchestrator";
 
 const streetTouchesCell = (street: Street, { x, y }: Cell): boolean => {
@@ -22,25 +21,50 @@ const streetTouchesCell = (street: Street, { x, y }: Cell): boolean => {
  * trip would break without it. When every active commuter has an alternative, removal
  * is safe — `findRoute` cannot subsequently return `undefined` for them.
  */
-const isStreetStillNeeded = (street: Street): boolean => {
-  for (const c of commuters) {
-    if (c.state === "home") continue;
+const commuterStillNeedsStreet = (
+  street: Street,
+  c: (typeof commuters)[number],
+): boolean => {
+  if (c.state === "home") return false;
 
-    const homeCell = c.parent! as unknown as Cell;
-    const workCells = c.workplace.points;
+  const homeCell = c.parent! as unknown as Cell;
+  const workCells = c.workplace.points;
 
-    const outbound = findRoute({
-      from: homeCell,
-      to: workCells,
-      exclude: street,
-    });
-    if (!outbound) return true;
-    const homeBound = findRoute({
-      from: outbound.at(-1)!,
+  if (c.state === "toHome") {
+    if (!routeUsesStreet(c.route, street)) return false;
+    if (!c.route[0]) return true;
+    return !findRoute({ from: c.route[0], to: [homeCell], exclude: street });
+  }
+
+  if (c.state === "unparking") {
+    const route = c.pendingRoute;
+    if (!route?.[0] || !routeUsesStreet(route, street)) return false;
+    return !findRoute({ from: route[0], to: [homeCell], exclude: street });
+  }
+
+  if (c.state === "toWork") {
+    const destination = c.destination;
+    if (!destination) return routeUsesStreet(c.route, street);
+
+    const returnRoute = findRoute({
+      from: destination,
       to: [homeCell],
       exclude: street,
     });
-    if (!homeBound) return true;
+    if (!returnRoute) return true;
+
+    if (!routeUsesStreet(c.route, street)) return false;
+    if (!c.route[0]) return true;
+    return !findRoute({ from: c.route[0], to: workCells, exclude: street });
+  }
+
+  if (!c.destination) return true;
+  return !findRoute({ from: c.destination, to: [homeCell], exclude: street });
+};
+
+const isStreetStillNeeded = (street: Street): boolean => {
+  for (const c of commuters) {
+    if (commuterStillNeedsStreet(street, c)) return true;
   }
   return false;
 };
@@ -58,6 +82,18 @@ export const removePath = (cell: Cell, prevCell?: Cell): void => {
   });
 
   if (!streetsToRemove.length) return;
+
+  const motorwaysToRemove = streetsToRemove.filter((street) => street.motorway);
+  if (motorwaysToRemove.length) {
+    for (const street of motorwaysToRemove) {
+      street.motorway = false;
+      if (!developerMode) session.motorways++;
+    }
+    updateInventoryCounters();
+    playRemoveThup();
+    commitStreetChanges();
+    return;
+  }
 
   for (const streetToRemove of streetsToRemove) {
     if (streetToRemove.pendingRemoval) continue;
@@ -77,15 +113,15 @@ export const cleanupPendingStreets = (): void => {
 
   toRemove.forEach((s) => {
     if (s.bridge) {
-      session.bridges++;
-      bridgeIndicatorCount.innerText = String(session.bridges);
+      if (!developerMode) session.bridges++;
+      updateInventoryCounters();
       bridgeIndicator.style.opacity = "1";
     } else if (s.motorway) {
-      session.motorways++;
-      motorwayIndicatorCount.innerText = String(session.motorways);
+      if (!developerMode) session.motorways++;
+      updateInventoryCounters();
     } else {
-      session.paths++;
-      pathTilesIndicatorCount.innerText = String(session.paths);
+      if (!developerMode) session.paths++;
+      updateInventoryCounters();
     }
     s.remove();
     playRemoveThup();

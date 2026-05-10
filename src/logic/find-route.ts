@@ -21,11 +21,18 @@ export interface RouteStep extends Cell {
 const nodeKey = (p: Cell): number => p.x * grid.height + p.y;
 
 const PENDING_PENALTY = 100;
+const MOTORWAY_ROUTE_WEIGHT = 0.6;
 
 let gridMap = new Map<number, GridNode>();
 // Directed edge keys for pending streets: ka * stride + kb (both directions stored).
 let pendingEdgeKeys = new Set<number>();
 let pendingEdgeStride = 1;
+
+const edgeBaseWeight = (a: Cell, b: Cell): number =>
+  a.x !== b.x && a.y !== b.y ? 1.414 : 1;
+
+const edgeTravelWeight = (a: Cell, b: Cell, motorway: boolean): number =>
+  motorway ? MOTORWAY_ROUTE_WEIGHT : edgeBaseWeight(a, b);
 
 const buildGrid = (): void => {
   const map = new Map<number, GridNode>();
@@ -105,11 +112,10 @@ const dijkstra = (
         let distance = 0;
         if (pk !== undefined) {
           const p = grid.get(pk)!;
-          const baseWeight = p.x !== node.x && p.y !== node.y ? 1.414 : 1;
           // ETA-aware: motorway segments are faster, so they contribute less to total distance.
           // Penalty is excluded — it's a routing-cost tiebreaker, not actual travel time.
           const edge = p.neighbors.find((n) => n.key === k);
-          distance = baseWeight * (edge?.motorway ? 0.6 : 1);
+          distance = edgeTravelWeight(p, node, edge?.motorway === true);
         }
         path.unshift({ x: node.x, y: node.y, distance } as RouteStep);
         k = pk;
@@ -129,9 +135,7 @@ const dijkstra = (
       const neighbor = grid.get(nk);
       if (!neighbor) continue;
 
-      const baseWeight =
-        neighbor.x !== node.x && neighbor.y !== node.y ? 1.414 : 1;
-      const weight = baseWeight * (motorway ? 0.6 : 1) + penalty;
+      const weight = edgeTravelWeight(node, neighbor, motorway) + penalty;
       const newCost = cost + weight;
 
       if (!best.has(nk) || newCost < best.get(nk)!) {

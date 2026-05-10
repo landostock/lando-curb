@@ -9,19 +9,24 @@ interface AudioRuntime {
   musicTrack?: string;
   musicStartTimer?: number;
   musicVolumeTimer?: number;
-  musicCrossfadeTimer?: number;
   musicLastActivityAt?: number;
   musicActivityScore?: number;
   musicFadeStartedAt?: number;
   musicPendingPlay?: boolean;
   initialized: boolean;
   listenersBound?: boolean;
+  mode: AudioMode;
   muted: boolean;
 }
+
+export type AudioMode = "all" | "muted" | "music" | "sfx";
 
 interface AudioApi {
   setMuted: (muted: boolean) => void;
   toggleMuted: () => boolean;
+  setMode: (mode: AudioMode) => AudioMode;
+  cycleMode: () => AudioMode;
+  currentMode: () => AudioMode;
   nextTrack: () => void;
   currentTrack: () => string | undefined;
 }
@@ -35,8 +40,11 @@ declare global {
 
 const runtime = (window.__landoAudio ??= {
   initialized: false,
-  muted: localStorage.getItem("lando.audio.muted") === "1",
+  mode: parseAudioMode(sessionStorage.getItem("lando.audio.mode")) ?? "all",
+  muted: false,
 });
+
+runtime.muted = runtime.mode === "muted";
 
 const AudioContextCtor = window.AudioContext;
 
@@ -61,6 +69,18 @@ const MUSIC_TRACKS = [
   new URL("../music/leberch-nature-437475.mp3", import.meta.url).href,
 ];
 
+function parseAudioMode(value: string | null): AudioMode | undefined {
+  if (
+    value === "all" ||
+    value === "muted" ||
+    value === "music" ||
+    value === "sfx"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 const now = (): number => runtime.context?.currentTime ?? 0;
 
 const stopLegacyMusic = (): void => {
@@ -84,10 +104,8 @@ const stopLegacyMusic = (): void => {
 stopLegacyMusic();
 window.clearTimeout(runtime.musicStartTimer);
 window.clearInterval(runtime.musicVolumeTimer);
-window.clearInterval(runtime.musicCrossfadeTimer);
 runtime.musicStartTimer = undefined;
 runtime.musicVolumeTimer = undefined;
-runtime.musicCrossfadeTimer = undefined;
 
 const easeOutCubic = (value: number): number => 1 - (1 - value) ** 3;
 
@@ -120,14 +138,16 @@ const targetMusicVolume = (): number => {
     (elapsed - MUSIC_ACTIVITY_HOLD_MS) / MUSIC_RECOVERY_MS,
   );
   return (
-    activeVolume +
-    (MUSIC_PASSIVE_VOLUME - activeVolume) * easeOutCubic(recovery)
-  ) * fadeMultiplier;
+    (activeVolume +
+      (MUSIC_PASSIVE_VOLUME - activeVolume) * easeOutCubic(recovery)) *
+    fadeMultiplier
+  );
 };
 
 const updateMusicVolume = (): void => {
   const music = runtime.musicEl;
   if (!music) return;
+  music.muted = runtime.mode === "muted" || runtime.mode === "sfx";
 
   const target = targetMusicVolume();
   const smoothing = target < music.volume ? 0.055 : 0.035;
@@ -178,22 +198,31 @@ const stopMusicElement = (music: HTMLAudioElement): void => {
 };
 
 const fadeOutMusicElement = (music: HTMLAudioElement): void => {
-  window.clearInterval(runtime.musicCrossfadeTimer);
-
   const startVolume = music.volume;
   const startedAt = performance.now();
-  runtime.musicCrossfadeTimer = window.setInterval(() => {
+  const timer = window.setInterval(() => {
     const progress = Math.min(
       1,
       (performance.now() - startedAt) / MUSIC_CROSSFADE_OUT_MS,
     );
     music.volume = startVolume * (1 - easeOutCubic(progress));
     if (progress >= 1) {
-      window.clearInterval(runtime.musicCrossfadeTimer);
-      runtime.musicCrossfadeTimer = undefined;
+      window.clearInterval(timer);
       stopMusicElement(music);
     }
   }, MUSIC_VOLUME_INTERVAL_MS);
+};
+
+export const fadeOutGameMusic = (): void => {
+  const music = runtime.musicEl;
+  if (!music) return;
+
+  runtime.musicEl = undefined;
+  runtime.musicFadeStartedAt = undefined;
+  runtime.musicPendingPlay = false;
+  runtime.musicLastActivityAt = undefined;
+  runtime.musicActivityScore = 0;
+  fadeOutMusicElement(music);
 };
 
 const createMusicElement = (
@@ -213,7 +242,7 @@ const createMusicElement = (
   music.loop = true;
   music.preload = "auto";
   music.volume = 0;
-  music.muted = runtime.muted;
+  music.muted = runtime.mode === "muted" || runtime.mode === "sfx";
   runtime.musicEl = music;
   return music;
 };
@@ -235,7 +264,7 @@ const playPreparedMusic = (): void => {
   runtime.musicPendingPlay = true;
   runtime.musicFadeStartedAt = performance.now();
   music.volume = 0;
-  music.muted = runtime.muted;
+  music.muted = runtime.mode === "muted" || runtime.mode === "sfx";
   updateMusicVolume();
   void music
     .play()
@@ -282,13 +311,14 @@ const ensureContext = (): AudioContext => {
     runtime.master = ctx.createGain();
     runtime.master.connect(ctx.destination);
   }
-  runtime.master.gain.value = runtime.muted ? 0 : 0.7;
+  runtime.master.gain.value = 0.7;
 
   if (!runtime.sfx) {
     runtime.sfx = ctx.createGain();
     runtime.sfx.connect(runtime.master);
   }
-  runtime.sfx.gain.value = 0.85;
+  runtime.sfx.gain.value =
+    runtime.mode === "all" || runtime.mode === "sfx" ? 0.85 : 0;
 
   return ctx;
 };
@@ -308,19 +338,45 @@ const ramp = (
 };
 
 const setMuted = (muted: boolean): void => {
-  runtime.muted = muted;
-  localStorage.setItem("lando.audio.muted", muted ? "1" : "0");
+  setMode(muted ? "muted" : "all");
+};
+
+const setMode = (mode: AudioMode): AudioMode => {
+  runtime.mode = mode;
+  runtime.muted = mode === "muted";
+  sessionStorage.setItem("lando.audio.mode", mode);
   if (runtime.master) {
-    runtime.master.gain.setTargetAtTime(muted ? 0 : 0.7, now(), 0.04);
+    runtime.master.gain.setTargetAtTime(0.7, now(), 0.04);
+  }
+  if (runtime.sfx) {
+    runtime.sfx.gain.setTargetAtTime(
+      mode === "all" || mode === "sfx" ? 0.85 : 0,
+      now(),
+      0.04,
+    );
   }
   if (runtime.musicEl) {
-    runtime.musicEl.muted = muted;
+    runtime.musicEl.muted = mode === "muted" || mode === "sfx";
   }
+  window.dispatchEvent(
+    new CustomEvent("lando-audio-mode-change", { detail: { mode } }),
+  );
+  return runtime.mode;
 };
 
 const toggleMuted = (): boolean => {
-  setMuted(!runtime.muted);
+  setMode(runtime.mode === "muted" ? "all" : "muted");
   return runtime.muted;
+};
+
+const cycleMode = (): AudioMode => {
+  const nextModeByMode: Record<AudioMode, AudioMode> = {
+    all: "muted",
+    muted: "music",
+    music: "sfx",
+    sfx: "all",
+  };
+  return setMode(nextModeByMode[runtime.mode]);
 };
 
 const unlock = (): void => {
@@ -351,9 +407,11 @@ const playTone = ({
   const destination = runtime.sfx;
   if (!destination) return;
   if (ctx.state !== "running") {
-    void ctx.resume().then(() =>
-      playTone({ frequency, duration, volume, type, bend, lowpass }),
-    );
+    void ctx
+      .resume()
+      .then(() =>
+        playTone({ frequency, duration, volume, type, bend, lowpass }),
+      );
     return;
   }
 
@@ -403,6 +461,9 @@ export const initAudio = (): void => {
   window.__landoAudioApi = {
     setMuted,
     toggleMuted,
+    setMode,
+    cycleMode,
+    currentMode: () => runtime.mode,
     nextTrack: playNextMusicTrack,
     currentTrack: () => runtime.musicTrack,
   };

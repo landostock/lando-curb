@@ -57,7 +57,8 @@ export const renderCommuter = (c: Commuter): void => {
     const { x: houseX, y: houseY } = toSvgPoint(c.parent);
     const facing = (c.parent as unknown as { facing: Direction }).facing;
 
-    const ux = facing.x, uy = facing.y;
+    const len = Math.hypot(facing.x, facing.y) || 1;
+    const ux = facing.x / len, uy = facing.y / len;
     const px = -uy, py = ux;
 
     const dAlong = 2.8 + 0.8 - CAR_H / 2;
@@ -68,6 +69,10 @@ export const renderCommuter = (c: Commuter): void => {
     const cy = houseY + uy * dAlong + py * dCross * side;
     const deg = (Math.atan2(uy, ux) * 180) / Math.PI - 90;
 
+    c.x = cx;
+    c.y = cy;
+    c.dx = ux * 0.001;
+    c.dy = uy * 0.001;
     c.svgElement.style.transform = `translate(${cx - CAR_W / 2}px, ${cy - CAR_H / 2}px) rotate(${deg}deg)`;
     return;
   }

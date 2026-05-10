@@ -4,6 +4,7 @@ import { colors } from "../gfx/colors";
 import { isPastHalfwayInto } from "../gfx/coords";
 import { streetShadowLayer } from "../gfx/layers";
 import { createSvgElement, toSvgEdge, toSvgPoint } from "../gfx/svg-utils";
+import { upgradeStreetToMotorway } from "../logic/motorway-upgrade";
 import { commitStreetChanges } from "../logic/orchestrator";
 import {
   cellInLake,
@@ -16,12 +17,12 @@ import type { Cell, Pixel } from "../types";
 import {
   bridgeIndicator,
   bridgeIndicatorCount,
+  developerMode,
   motorwayIndicator,
   motorwayIndicatorCount,
   motorwayMode,
   pathTilesIndicator,
   pathTilesIndicatorCount,
-  setMotorwayMode,
 } from "../ui/ui";
 
 const transition = `all .2s, scale .4s cubic-bezier(.5,2,.5,1)`;
@@ -74,6 +75,64 @@ export function onDown(startCell: Cell): void {
 
 export type MoveResult = "pending" | "placed" | "blocked" | "exhausted";
 
+const upgradeExistingStreet = (startCell: Cell, cell: Cell): MoveResult => {
+  const result = upgradeStreetToMotorway(startCell, cell);
+  if (result === "exhausted") {
+    flashExhausted(
+      motorwayIndicator,
+      motorwayIndicatorCount,
+      () => session.motorways,
+    );
+    indicator.style.opacity = "0";
+    return "exhausted";
+  }
+  return result === "upgraded" ? "placed" : "blocked";
+};
+
+const reserveBuildResource = (needsBridge: boolean): boolean => {
+  if (needsBridge) {
+    if (!developerMode && session.bridges <= 0) {
+      flashExhausted(
+        bridgeIndicator,
+        bridgeIndicatorCount,
+        () => session.bridges,
+      );
+      indicator.style.opacity = "0";
+      return false;
+    }
+    // Motorway-mode draw that became a bridge — flash the motorway indicator so the player
+    // can see their motorway currency wasn't the one deducted.
+    if (motorwayMode && !developerMode) {
+      flashExhausted(
+        motorwayIndicator,
+        motorwayIndicatorCount,
+        () => session.motorways,
+      );
+    }
+    if (!developerMode) {
+      session.bridges--;
+      bridgeIndicatorCount.innerText = String(session.bridges);
+    }
+    return true;
+  }
+
+  if (!motorwayMode && !developerMode && session.paths <= 0) {
+    flashExhausted(
+      pathTilesIndicator,
+      pathTilesIndicatorCount,
+      () => session.paths,
+    );
+    indicator.style.opacity = "0";
+    return false;
+  }
+
+  if (!developerMode) {
+    session.paths--;
+    pathTilesIndicatorCount.innerText = String(session.paths);
+  }
+  return true;
+};
+
 export function onMove(
   startCell: Cell,
   cell: Cell,
@@ -109,59 +168,16 @@ export function onMove(
   // Validate placement BEFORE deducting or flashing "!" — a player dragging over a BP or
   // lake shouldn't see an "out of paths" exhaustion flash.
   if (cellIsBlocked(cell)) return "blocked";
-  if (samePathInBothCells(startCell, cell)) return "blocked";
+  if (samePathInBothCells(startCell, cell)) {
+    if (motorwayMode && !needsBridge)
+      return upgradeExistingStreet(startCell, cell);
+    return "blocked";
+  }
   if (houseInCell(cell)) return "blocked";
 
-  // Resource availability. Bridges take priority over motorway/path when a lake is involved.
-  const usingMotorway = motorwayMode && !needsBridge && session.motorways > 0;
-  if (needsBridge) {
-    if (session.bridges <= 0) {
-      flashExhausted(
-        bridgeIndicator,
-        bridgeIndicatorCount,
-        () => session.bridges,
-      );
-      indicator.style.opacity = "0";
-      return "exhausted";
-    }
-    // Motorway-mode draw that became a bridge — flash the motorway indicator so the player
-    // can see their motorway currency wasn't the one deducted.
-    if (motorwayMode) {
-      flashExhausted(
-        motorwayIndicator,
-        motorwayIndicatorCount,
-        () => session.motorways,
-      );
-    }
-  } else if (motorwayMode && session.motorways <= 0) {
-    flashExhausted(
-      motorwayIndicator,
-      motorwayIndicatorCount,
-      () => session.motorways,
-    );
-    indicator.style.opacity = "0";
-    return "exhausted";
-  } else if (!motorwayMode && session.paths <= 0) {
-    flashExhausted(
-      pathTilesIndicator,
-      pathTilesIndicatorCount,
-      () => session.paths,
-    );
-    indicator.style.opacity = "0";
-    return "exhausted";
-  }
+  if (motorwayMode && !needsBridge) return "blocked";
 
-  if (needsBridge) {
-    session.bridges--;
-    bridgeIndicatorCount.innerText = String(session.bridges);
-  } else if (usingMotorway) {
-    session.motorways--;
-    motorwayIndicatorCount.innerText = String(session.motorways);
-    if (session.motorways === 0) setMotorwayMode(false);
-  } else {
-    session.paths--;
-    pathTilesIndicatorCount.innerText = String(session.paths);
-  }
+  if (!reserveBuildResource(needsBridge)) return "exhausted";
 
   addStreet(
     new Street({
@@ -169,14 +185,14 @@ export function onMove(
         { x: startCell.x, y: startCell.y },
         { x: cell.x, y: cell.y },
       ],
-      motorway: usingMotorway,
+      motorway: false,
       bridge: needsBridge,
     }),
   );
 
   // Adding a street only ever opens new options — no atWork commuter is stranded.
   commitStreetChanges();
-  playRoadPop({ bridge: needsBridge, motorway: usingMotorway });
+  playRoadPop({ bridge: needsBridge });
 
   indicator.style.transition = "";
   return "placed";

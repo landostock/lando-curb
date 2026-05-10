@@ -1,12 +1,15 @@
 import { GameObjectClass } from "kontra";
 
 import { computeParkingRail } from "../gfx/parking-rail";
-import { dispatchCommutersFor } from "../logic/commuter-dispatch";
+import {
+  dispatchCommutersFor,
+  hasDispatchableCommuter,
+} from "../logic/commuter-dispatch";
 import { updateGridData } from "../logic/find-route";
 import { getSpawningConfig } from "../logic/spawning";
 import { addStreet, businessParks, session } from "../state";
 import type { Cell, Direction, Pixel, Point } from "../types";
-import { pickupCount } from "../ui/ui";
+import { developerMode, pickupCount } from "../ui/ui";
 import {
   type BusinessParkRenderState,
   renderBusinessPark,
@@ -34,6 +37,7 @@ export interface BusinessParkProperties {
   borderColors?: string[];
   relativePathPoints?: Array<Point & { locked?: boolean }>;
   parkingCapacity?: number;
+  silentAppearChime?: boolean;
   [key: string]: unknown;
 }
 
@@ -49,6 +53,7 @@ export class BusinessPark extends GameObjectClass {
   declare borderColor: string;
   declare type: string;
   declare appearing: boolean;
+  declare silentAppearChime: boolean;
   types: string[] = [];
   // Render state — owned exclusively by business-park.render.ts; undefined until addBusinessParkToSvg fires
   rs?: BusinessParkRenderState;
@@ -81,6 +86,17 @@ export class BusinessPark extends GameObjectClass {
     return this.baySlots.filter((c) => c?.state === "parking").length;
   }
 
+  get occupiedBayCount(): number {
+    return this.baySlots.filter((c) => c !== null).length;
+  }
+
+  get availableArrivalSlots(): number {
+    return Math.max(
+      0,
+      this.parkingCapacity - this.occupiedBayCount - this.assignedPeople.length,
+    );
+  }
+
   get activeFulfillmentCount(): number {
     return this.assignedPeople.length + this.pendingParkingArrivals;
   }
@@ -111,6 +127,20 @@ export class BusinessPark extends GameObjectClass {
   leaveBay(c: Commuter): void {
     const slot = this.baySlots.indexOf(c);
     if (slot !== -1) this.baySlots[slot] = null;
+  }
+
+  private hurryParkedCommuters(): void {
+    if (this.availableArrivalSlots > 0) return;
+
+    const parked = this.baySlots.filter(
+      (c): c is Commuter => c?.state === "atWork",
+    );
+    if (!parked.length) return;
+
+    const oldest = parked.reduce((best, c) =>
+      c.officeTimer > best.officeTimer ? c : best,
+    );
+    oldest.officeTimer = Math.max(oldest.officeTimer, 110);
   }
 
   hasType(color: string): boolean {
@@ -181,7 +211,24 @@ export class BusinessPark extends GameObjectClass {
         this.demand - this.activeFulfillmentCount,
       );
       if (unservedDemand > 0) {
-        this.demandTimer -= Math.min(4, unservedDemand);
+        const noRouteAvailable = !hasDispatchableCommuter(this);
+        const outOfBuildOptions =
+          !developerMode &&
+          session.paths <= 0 &&
+          session.motorways <= 0 &&
+          session.bridges <= 0;
+        this.hurryParkedCommuters();
+
+        if (noRouteAvailable && outOfBuildOptions) {
+          this.demandTimer = Math.min(
+            this.demandTimer + cfg.demandTimerRecovery,
+            cfg.demandTimerMax,
+          );
+        } else {
+          this.demandTimer -= noRouteAvailable
+            ? Math.min(2, unservedDemand)
+            : Math.min(4, unservedDemand);
+        }
       } else {
         this.demandTimer = Math.min(
           this.demandTimer + cfg.demandTimerRecovery,
@@ -244,14 +291,17 @@ function spawnSequence(
 
   // 3. Unlock parking bays one by one
   for (let i = 0; i < bp.parkingCapacity; i++)
-    setTimeout(() => {
-      if (alive()) bp.capacity++;
-    }, 2000 + delay + i * 1000);
+    setTimeout(
+      () => {
+        if (alive()) bp.capacity++;
+      },
+      2000 + delay + i * 1000,
+    );
 
   // 4. Lift appearing flag, start demand timer
   setTimeout(() => {
     if (!alive()) return;
     bp.appearing = false;
     bp.demandTimer = getSpawningConfig().demandTimerMax;
-  }, 3000);
+  }, 3000 + delay);
 }

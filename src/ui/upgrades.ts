@@ -4,10 +4,8 @@ import { createElement, createSvgElement } from "../gfx/svg-utils";
 import { lakes, session } from "../state";
 import {
   bridgeIndicator,
-  bridgeIndicatorCount,
   motorwayIndicator,
-  motorwayIndicatorCount,
-  pathTilesIndicatorCount,
+  updateInventoryCounters,
 } from "./ui";
 
 // --- Upgrade picker UI ---
@@ -44,12 +42,12 @@ interface UpgradeOption {
   apply: () => void;
 }
 
-const roadsSeven: UpgradeOption = {
-  title: "+7 Roads",
+const roadsEight: UpgradeOption = {
+  title: "+8 Roads",
   icon: "M3 12h4q2 0 2-2t2-2h2q2 0 2 2t2 2h4",
   apply: () => {
-    session.paths += 7;
-    pathTilesIndicatorCount.innerText = String(session.paths);
+    session.paths += 8;
+    updateInventoryCounters();
   },
 };
 
@@ -58,7 +56,7 @@ const motorways: UpgradeOption = {
   icon: "M3 8h18M3 16h18",
   apply: () => {
     session.motorways += 2;
-    motorwayIndicatorCount.innerText = String(session.motorways);
+    updateInventoryCounters();
     motorwayIndicator.style.opacity = "1";
   },
 };
@@ -68,7 +66,7 @@ const bridge: UpgradeOption = {
   icon: "M3 16h18 M3 16 Q12 4 21 16 M6 16v4 M18 16v4",
   apply: () => {
     session.bridges += 10;
-    bridgeIndicatorCount.innerText = String(session.bridges);
+    updateInventoryCounters();
     bridgeIndicator.style.opacity = "1";
   },
 };
@@ -76,7 +74,7 @@ const bridge: UpgradeOption = {
 const getAvailableOptions = (): UpgradeOption[] => {
   const others: UpgradeOption[] = [motorways];
   if (lakes.length > 0) others.push(bridge);
-  return [roadsSeven, ...others];
+  return [roadsEight, ...others];
 };
 
 const createCard = (

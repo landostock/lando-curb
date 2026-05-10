@@ -1,6 +1,6 @@
 import type { GameLoop } from "kontra";
 
-import { playGameOverSound, startGameMusic } from "./audio";
+import { fadeOutGameMusic, playGameOverSound, startGameMusic } from "./audio";
 import { board, grid, resetBoard } from "./board";
 import { svgPxToDisplayPx } from "./gfx/coords";
 import { clearLayers } from "./gfx/layers";
@@ -21,7 +21,12 @@ import {
   transitionGameoverToMenu,
 } from "./ui/gameover";
 import { hideMenu, initMenu, initMenuBackground, showMenu } from "./ui/menu";
-import { hideGameHud, resetHudCounters, setMotorwayMode } from "./ui/ui";
+import {
+  hideGameHud,
+  resetDeveloperMode,
+  resetHudCounters,
+  setMotorwayMode,
+} from "./ui/ui";
 import { resetUpgrades } from "./ui/upgrades";
 
 type MapGenerator = (delay: number) => void;
@@ -54,6 +59,7 @@ const selectMap = (map: MapGenerator): void => {
   gameState.currentMap = map;
   // Clear the preloaded random map and regenerate with chosen map
   resetState();
+  resetDeveloperMode();
   initDemandBudgets();
   resetDemandBudgets();
   resetSpawning();
@@ -71,6 +77,7 @@ const startNewGame = (): void => {
 
     setTimeout(() => {
       resetState();
+      resetDeveloperMode();
       initDemandBudgets();
       resetDemandBudgets();
       resetSpawning();
@@ -99,6 +106,7 @@ const gameoverToMenu = (): void => {
   gameState.gameStarted = false;
   transitionGameoverToMenu(session.paths, () => {
     resetState();
+    resetDeveloperMode();
     initDemandBudgets();
     resetDemandBudgets();
     resetSpawning();
@@ -132,6 +140,7 @@ export const checkGameOver = (): void => {
     if (!f.isAlive()) {
       gameState.gameStarted = false;
       loop.stop();
+      fadeOutGameMusic();
       playGameOverSound();
 
       gameState.lostBusinessParkPosition = svgPxToDisplayPx({

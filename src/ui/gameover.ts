@@ -8,13 +8,12 @@ import { session } from "../state";
 import type { Pixel } from "../types";
 import { menuBackground } from "./menu";
 import {
-  gridRedToggleButton,
-  gridRedToggleTooltip,
   gridToggleButton,
   gridToggleTooltip,
   pathTilesIndicatorCount,
   pauseButton,
   scoreCounters,
+  setGameplayControlsVisible,
   uiContainer,
 } from "./ui";
 
@@ -29,6 +28,7 @@ const restartButton = createElement("button");
 const menuButtonWrapper = createElement();
 const menuButton = createElement("button");
 const scoreWrapper = createElement();
+const highscoreText = createElement();
 export const toggleGameoverlayButton = createElement("button");
 
 export const initGameover = (
@@ -74,6 +74,13 @@ export const initGameover = (
   addEventListener("resize", layoutText3);
 
   scoreWrapper.style.cssText = `display:inline-flex;padding:6px 12px;line-height:24px;color:#fff;border-radius:64px;background:${colors.ui}`;
+  highscoreText.style.cssText = `
+    flex-basis: 100%;
+    margin-top: 4px;
+    font-size: 18px;
+    line-height: 22px;
+    color: ${colors.ui};
+  `;
 
   menuButtonWrapper.style.opacity = "0";
   restartButtonWrapper.style.opacity = "0";
@@ -135,7 +142,10 @@ export const showGameover = (): void => {
   menuButtonWrapper.style.transition = `opacity .5s 3s`;
   toggleGameoverlayButton.style.transition = `all .2s, opacity .5s 3.5s`;
 
-  scoreWrapper.innerHTML = `Score:${score}`;
+  const previousHighscore = Number(localStorage.getItem("Lando Curb") ?? 0);
+  const highscore = Math.max(score, previousHighscore);
+  scoreWrapper.innerText = `Score: ${score}`;
+  highscoreText.innerText = `Highscore: ${highscore}`;
 
   const pickupCount = createElement("u");
   pickupCount.innerText = `${session.pickups} deliveries`;
@@ -144,12 +154,11 @@ export const showGameover = (): void => {
   gameoverText2.append(pickupCount, " completed in your city.");
 
   gameoverText3.innerHTML = "";
-  gameoverText3.append(scoreWrapper);
+  gameoverText3.append(scoreWrapper, highscoreText);
 
-  gridRedToggleButton.style.transition = `all .2s`;
   gridToggleButton.style.transition = `all .2s`;
-  gridRedToggleButton.style.opacity = "0";
-  gridToggleButton.style.opacity = "0";
+  gridToggleTooltip.style.opacity = "0";
+  setGameplayControlsVisible(false);
   scoreCounters.style.opacity = "0";
 
   setTimeout(() => {
@@ -180,14 +189,10 @@ export const prepareRestart = (): void => {
   svgElement.style.transition = `transform 2s`;
   svgElement.style.transform = `rotate(0) scale(2) translate(0, ${svgPxToDisplayPx({ x: 0, y: grid.height }).y / -2}px)`;
 
-  gridRedToggleButton.style.transition = `all .2s, width .5s 4s, opacity .5s 3s`;
-  gridToggleButton.style.transition = `all .2s, width .5s 4s, opacity .5s 3s`;
-
-  gridRedToggleTooltip.style.transition = `all .5s`;
+  gridToggleButton.style.transition = `all .2s`;
   gridToggleTooltip.style.transition = `all .5s`;
 
-  gridRedToggleButton.style.opacity = "1";
-  gridToggleButton.style.opacity = "1";
+  setGameplayControlsVisible(false);
 
   pauseButton.style.opacity = "0";
 
@@ -207,17 +212,11 @@ export const transitionGameoverToMenu = (
   toggleGameoverlayButton.style.pointerEvents = "none";
   toggleGameoverlayButton.style.transition = `all .2s, opacity .5s`;
 
-  gridRedToggleTooltip.style.transition = `all .2s, width .5s 4s, opacity .5s 4s`;
   gridToggleTooltip.style.transition = `all .2s, width .5s 4s, opacity .5s 4s`;
-  gridRedToggleButton.style.transition = `all .2s, width .5s 4s, opacity .5s 4s`;
   gridToggleButton.style.transition = `all .2s, width .5s 4s, opacity .5s 4s`;
 
-  gridRedToggleTooltip.style.width = "96px";
   gridToggleTooltip.style.width = "96px";
-  gridRedToggleTooltip.style.opacity = "1";
-  gridToggleTooltip.style.opacity = "1";
-  gridRedToggleButton.style.opacity = "1";
-  gridToggleButton.style.opacity = "1";
+  setGameplayControlsVisible(false);
 
   setTimeout(() => {
     resetViewBox();
@@ -254,12 +253,18 @@ export const hideGameover = (): void => {
   // on full-screen elements interfere with game element z-ordering while hidden.
   menuBackground.addEventListener(
     "transitionend",
-    () => { if (menuBackground.style.opacity === "0") menuBackground.style.display = "none"; },
+    () => {
+      if (menuBackground.style.opacity === "0")
+        menuBackground.style.display = "none";
+    },
     { once: true },
   );
   gameoverWrapper.addEventListener(
     "transitionend",
-    () => { if (gameoverWrapper.style.opacity === "0") gameoverWrapper.style.display = "none"; },
+    () => {
+      if (gameoverWrapper.style.opacity === "0")
+        gameoverWrapper.style.display = "none";
+    },
     { once: true },
   );
 };

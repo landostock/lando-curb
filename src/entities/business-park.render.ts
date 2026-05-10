@@ -68,7 +68,7 @@ export function scheduleSpawnAnimation(bp: BusinessPark, delay: number): void {
 }
 
 function addBusinessParkToSvg(bp: BusinessPark): void {
-  playAppearChime();
+  if (!bp.silentAppearChime) playAppearChime();
   const layout = computeLayout(bp);
   const rs = initRenderState(bp, layout);
 

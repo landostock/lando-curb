@@ -7,13 +7,37 @@ import { edgeIsMotorway, isIntersection, neighborCount } from "./find-route";
 const MIN_ROAD_SPEED = 0.11;
 const MIN_YIELD_SPEED = 0.14;
 const MIN_FOLLOW_SPEED = 0.12;
+const MOTORWAY_SPEED_MULTIPLIER = 5;
+const MOTORWAY_RAMP_PX = 6;
 
-const onMotorwayNow = (c: Commuter): boolean => {
-  if (c.lastTraversed && c.route[0] && edgeIsMotorway(c.lastTraversed, c.route[0]))
-    return true;
-  if (c.route.length >= 2 && edgeIsMotorway(c.route[0]!, c.route[1]!))
-    return true;
-  return false;
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+
+const smoothstep = (value: number): number => value * value * (3 - 2 * value);
+
+const currentMotorwayBoost = (c: Commuter): number => {
+  if (!c.lastTraversed || !c.route[0]) return 1;
+  if (!edgeIsMotorway(c.lastTraversed, c.route[0])) return 1;
+
+  const start = toSvgPoint(c.lastTraversed);
+  const end = toSvgPoint(c.route[0]);
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 <= 0) return 1;
+
+  const progress = clamp01(((c.x - start.x) * dx + (c.y - start.y) * dy) / len2);
+  const lengthPx = Math.sqrt(len2);
+  const ramp = Math.min(0.45, MOTORWAY_RAMP_PX / lengthPx);
+  const rampIn = smoothstep(clamp01(progress / ramp));
+  const rampOut = smoothstep(clamp01((1 - progress) / ramp));
+  const visualRamp = Math.min(rampIn, rampOut);
+  const cellDistance = Math.hypot(
+    c.route[0].x - c.lastTraversed.x,
+    c.route[0].y - c.lastTraversed.y,
+  );
+  const targetBoost = MOTORWAY_SPEED_MULTIPLIER * cellDistance;
+
+  return 1 + (targetBoost - 1) * visualRamp;
 };
 
 const isOffRoadState = (c: Commuter): boolean =>
@@ -103,7 +127,7 @@ export const computeTargetSpeed = (c: Commuter): number => {
 
   if (c.originalRoute.length < 3) speed *= 0.9;
 
-  if (onMotorwayNow(c)) speed *= 5;
+  speed *= currentMotorwayBoost(c);
 
   if (c.route.length >= 2 && isIntersection(c.route[0]!)) {
     speed = applyIntersectionRules(c, speed);

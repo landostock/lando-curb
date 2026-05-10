@@ -11,7 +11,9 @@ svgContainerElement.style.cssText = `
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: ${colors.grass};
+  background:
+    repeating-linear-gradient(-55deg, #0000000b 0 30px, #0000 30px 60px),
+    ${colors.grass};
   cursor: cell;
 `;
 svgContainerElement.style.width = "100vw";
@@ -22,7 +24,7 @@ export const svgHazardLines = createElement();
 svgHazardLines.style.cssText = `
   position: absolute;
   display: grid;
-  background: repeating-linear-gradient(-55deg, #0001 0 12px, #0000 0 24px);
+  background: none;
 `;
 svgHazardLines.style.width = "100vw";
 svgHazardLines.style.height = "100vh";
@@ -34,7 +36,7 @@ export const svgHazardLinesRed = createElement();
 svgHazardLinesRed.style.cssText = `
   position: absolute;
   display: grid;
-  background: repeating-linear-gradient(-55deg, #f002 0 12px, #0000 0 24px);
+  background: none;
 `;
 svgHazardLinesRed.style.width = "100vw";
 svgHazardLinesRed.style.height = "100vh";

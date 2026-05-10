@@ -24,6 +24,51 @@ export const setMotorwayMode = (on: boolean): void => {
 export const bridgeIndicator = createElement();
 export const bridgeIndicatorCount = createElement();
 
+export const developerModeButton = createElement("button");
+export let developerMode = false;
+
+export const updateInventoryCounters = (): void => {
+  pathTilesIndicatorCount.innerText = developerMode ? "∞" : String(session.paths);
+  motorwayIndicatorCount.innerText = developerMode
+    ? "∞"
+    : String(session.motorways);
+  bridgeIndicatorCount.innerText = developerMode
+    ? "∞"
+    : String(session.bridges);
+};
+
+const setDeveloperModeButtonState = (): void => {
+  developerModeButton.innerText = developerMode ? "ON" : "DEV";
+  developerModeButton.title = developerMode
+    ? "Developer Mode: On"
+    : "Developer Mode: Off";
+  developerModeButton.setAttribute("aria-label", developerModeButton.title);
+  developerModeButton.style.background = developerMode
+    ? colors.motorway
+    : "#f7f7f0";
+  developerModeButton.style.color = developerMode ? "#fff" : colors.ui;
+  developerModeButton.style.boxShadow = developerMode
+    ? `0 0 0 2px #fff, 0 8px 24px ${colors.shade}`
+    : `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
+};
+
+export const enableDeveloperMode = (): void => {
+  if (developerMode) return;
+  const confirmed = window.confirm(
+    "Developer Mode is for testing. It gives unlimited roads, bridges, and motorways, and it cannot be turned off for this game. Resource counts and scoring are no longer comparable to a normal run. Enable Developer Mode?",
+  );
+  if (!confirmed) return;
+  developerMode = true;
+  setDeveloperModeButtonState();
+  updateInventoryCounters();
+};
+
+export const resetDeveloperMode = (): void => {
+  developerMode = false;
+  setDeveloperModeButtonState();
+  updateInventoryCounters();
+};
+
 export const pauseButton = createElement("button");
 export const pauseSvgPath = createSvgElement("path");
 
@@ -47,6 +92,7 @@ const setClockTransitions = (enabled: boolean): void => {
 };
 
 export const setUpgradeCharge = (progress: number): void => {
+  if (clockPips.length < 12) return;
   const count = Math.min(12, Math.floor(progress * 12));
   if (count === chargeCount) return;
   chargeCount = count;
@@ -95,6 +141,57 @@ export const gridRedToggleSvg = createSvgElement("svg");
 export const gridRedToggleSvgPath = createSvgElement("path");
 export const gridRedToggleTooltip = createElement();
 
+export const audioModeButton = createElement("button");
+export const audioModeSvg = createSvgElement("svg");
+export const audioModeSvgPath = createSvgElement("path");
+export const audioModeTooltip = createElement();
+
+export const helpButton = createElement("button");
+export const helpOverlay = createElement();
+export const helpPanel = createElement();
+export const helpCloseButton = createElement("button");
+
+type AudioMode = "all" | "muted" | "music" | "sfx";
+
+const audioModeLabels: Record<AudioMode, string> = {
+  all: "All",
+  muted: "Mute",
+  music: "Music Only",
+  sfx: "Effects Only",
+};
+
+const audioModePaths: Record<AudioMode, string> = {
+  all: "M3.5 7h2.2L8.8 4.4v7.2L5.7 9H3.5ZM10.7 6.1q1.2 1.9 0 3.8M12.7 4.8q2.4 3.2 0 6.4",
+  muted: "M3.5 7h2.2L8.8 4.4v7.2L5.7 9H3.5ZM11 5.6l3 4.8M14 5.6l-3 4.8",
+  music:
+    "M6.4 11.4c-1 0-1.8-.5-1.8-1.2S5.4 9 6.4 9s1.8.5 1.8 1.2-.8 1.2-1.8 1.2ZM8.2 10.2V3.8l4 1",
+  sfx: "M8 4.1v1.8M8 10.1v1.8M4.1 8h1.8M10.1 8h1.8M5.2 5.2l1.3 1.3M9.5 9.5l1.3 1.3M10.8 5.2 9.5 6.5M6.5 9.5l-1.3 1.3",
+};
+
+export const setAudioModeButton = (mode: AudioMode): void => {
+  const label = audioModeLabels[mode];
+  audioModeButton.title = `Audio: ${label}`;
+  audioModeButton.setAttribute("aria-label", `Audio: ${label}`);
+  audioModeSvgPath.setAttribute("d", audioModePaths[mode]);
+  audioModeSvgPath.setAttribute(
+    "stroke",
+    mode === "muted" ? colors.red : mode === "all" ? colors.ui : "#2f5d70",
+  );
+  audioModeButton.style.background =
+    mode === "muted" ? "#f7f0eb" : mode === "all" ? colors.house : "#edf7f4";
+};
+
+export const setGameplayControlsVisible = (visible: boolean): void => {
+  gridToggleButton.style.opacity = visible ? "1" : "0";
+  gridToggleButton.style.pointerEvents = visible ? "all" : "none";
+  audioModeButton.style.opacity = visible ? "1" : "0";
+  audioModeButton.style.pointerEvents = visible ? "all" : "none";
+  developerModeButton.style.opacity = visible ? "1" : "0";
+  developerModeButton.style.visibility = visible ? "visible" : "hidden";
+  developerModeButton.style.pointerEvents = visible ? "all" : "none";
+  if (!visible) gridToggleTooltip.style.opacity = "0";
+};
+
 // eslint-disable-next-line max-lines-per-function
 export const initUi = () => {
   const styles = createElement("style");
@@ -138,6 +235,49 @@ export const initUi = () => {
     @keyframes clockBurst {
       0%   { transform: scale(1);   opacity: .9; stroke-width: 2; }
       100% { transform: scale(5.5); opacity: 0;  stroke-width: 0; }
+    }
+    .help-copy {
+      margin: 0;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .help-kbd {
+      display: inline-flex;
+      min-width: 28px;
+      height: 28px;
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9px;
+      padding: 0 7px;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px ${colors.shade2}, 0 2px 0 ${colors.shade};
+      color: ${colors.ui};
+      font-size: 15px;
+      font-weight: 850;
+    }
+    .help-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px ${colors.shade};
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .help-shortcut {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 3px 10px 3px 4px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.5);
+      box-shadow: inset 0 0 0 1px rgba(68,68,51,.07);
+      font-size: 15px;
+      font-weight: 800;
     }
   `;
   document.head.append(styles);
@@ -328,6 +468,7 @@ export const initUi = () => {
   gridRedToggleButton.style.cssText = `position:absolute;bottom:72px;right:16px;padding:0;pointer-events:all;`;
   gridRedToggleButton.style.width = "48px";
   gridRedToggleButton.style.height = "48px";
+  gridRedToggleButton.style.opacity = "0";
   gridRedToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
@@ -344,6 +485,7 @@ export const initUi = () => {
   `;
   gridRedToggleTooltip.style.height = "48px";
   gridRedToggleTooltip.style.width = "96px";
+  gridRedToggleTooltip.style.opacity = "0";
   gridRedToggleTooltip.style.transition = `all .5s`;
 
   gridToggleSvg.setAttribute("viewBox", "0 0 16 16");
@@ -358,9 +500,11 @@ export const initUi = () => {
   gridToggleSvgPath.style.transformOrigin = "center";
   gridToggleSvg.append(gridToggleSvgPath);
   gridToggleButton.append(gridToggleSvg);
-  gridToggleButton.style.cssText = `position:absolute;bottom:16px;right:16px;padding:0;pointer-events:all;`;
+  gridToggleButton.style.cssText = `position:absolute;bottom:128px;right:16px;padding:0;pointer-events:all;`;
   gridToggleButton.style.width = "48px";
   gridToggleButton.style.height = "48px";
+  gridToggleButton.style.opacity = "0";
+  gridToggleButton.style.pointerEvents = "none";
   gridToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
@@ -372,12 +516,225 @@ export const initUi = () => {
     padding: 0 64px 0 16px;
     white-space: pre;
     pointer-events: all;
-    bottom: 16px;
+    bottom: 128px;
     background: ${colors.ui};
   `;
   gridToggleTooltip.style.height = "48px";
   gridToggleTooltip.style.width = "96px";
+  gridToggleTooltip.style.opacity = "0";
   gridToggleTooltip.style.transition = `all .5s`;
+
+  audioModeSvg.setAttribute("viewBox", "0 0 16 16");
+  audioModeSvg.setAttribute("width", String(42));
+  audioModeSvg.setAttribute("height", String(42));
+  audioModeSvgPath.setAttribute("fill", "none");
+  audioModeSvgPath.setAttribute("stroke", colors.ui);
+  audioModeSvgPath.setAttribute("stroke-width", String(1.35));
+  audioModeSvgPath.setAttribute("stroke-linecap", "round");
+  audioModeSvgPath.setAttribute("stroke-linejoin", "round");
+  audioModeSvgPath.style.transition = `all .2s`;
+  audioModeSvg.append(audioModeSvgPath);
+  audioModeButton.append(audioModeSvg);
+  audioModeButton.style.cssText = `
+    position:absolute;
+    bottom:72px;
+    right:16px;
+    padding:0;
+    pointer-events:all;
+    display:grid;
+    place-items:center;
+  `;
+  audioModeButton.style.width = "48px";
+  audioModeButton.style.height = "48px";
+  audioModeButton.style.opacity = "0";
+  audioModeButton.style.pointerEvents = "none";
+  audioModeButton.style.boxShadow = `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
+  audioModeTooltip.style.display = "none";
+  setAudioModeButton("all");
+
+  developerModeButton.style.cssText = `
+    position:absolute;
+    bottom:184px;
+    right:16px;
+    padding:0;
+    pointer-events:all;
+    display:grid;
+    place-items:center;
+    font-size:13px;
+    line-height:1;
+    letter-spacing:0;
+    z-index:5;
+  `;
+  developerModeButton.style.width = "48px";
+  developerModeButton.style.height = "48px";
+  developerModeButton.style.opacity = "0";
+  developerModeButton.style.visibility = "hidden";
+  developerModeButton.style.pointerEvents = "none";
+  developerModeButton.addEventListener("click", () => {
+    enableDeveloperMode();
+  });
+  setDeveloperModeButtonState();
+
+  helpButton.style.cssText = `
+    position:absolute;
+    bottom:16px;
+    right:16px;
+    padding:0;
+    pointer-events:all;
+    display:grid;
+    place-items:center;
+    background:#f7f7f0;
+    font-size:28px;
+    line-height:1;
+  `;
+  helpButton.style.width = "48px";
+  helpButton.style.height = "48px";
+  helpButton.style.opacity = "1";
+  helpButton.style.boxShadow = `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
+  helpButton.innerText = "?";
+  helpButton.title = "Rules, controls, and shortcuts";
+  helpButton.setAttribute("aria-label", "Rules, controls, and shortcuts");
+
+  helpOverlay.style.cssText = `
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    padding:24px;
+    pointer-events:none;
+    opacity:0;
+    background:rgba(31, 38, 24, .28);
+    backdrop-filter: blur(7px) saturate(1.05);
+    transition: opacity .24s ease;
+  `;
+  helpOverlay.style.zIndex = "4";
+  helpOverlay.setAttribute("aria-hidden", "true");
+
+  helpPanel.style.cssText = `
+    width:min(680px, calc(100vw - 48px));
+    max-height:calc(100vh - 48px);
+    overflow:auto;
+    box-sizing:border-box;
+    padding:30px;
+    border-radius:20px;
+    background:#eef3e4;
+    box-shadow:
+      0 22px 70px rgba(20, 24, 16, .24),
+      inset 0 0 0 1px rgba(68, 68, 51, .09);
+    color:${colors.ui};
+    transform:translateY(10px) scale(.98);
+    transition: transform .24s ease;
+  `;
+
+  const helpTitle = createElement();
+  helpTitle.innerText = "Lando Curb";
+  helpTitle.style.cssText = `
+    margin:0;
+    font-size:36px;
+    line-height:1;
+    letter-spacing:0;
+  `;
+
+  const helpIntro = createElement();
+  helpIntro.className = "help-copy";
+  helpIntro.style.marginTop = "12px";
+  helpIntro.innerText =
+    "Connect houses to business parks efficiently. Every road tile matters.";
+
+  const helpGrid = createElement();
+  helpGrid.style.cssText = `
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:16px;
+    margin-top:24px;
+  `;
+
+  const makeHelpBlock = (title: string, text: string): HTMLElement => {
+    const block = createElement();
+    block.style.cssText = `
+      min-height:120px;
+      padding:18px;
+      border-radius:14px;
+      background:rgba(255,255,255,.54);
+      box-shadow:inset 0 0 0 1px rgba(68,68,51,.08);
+    `;
+    const heading = createElement();
+    heading.innerText = title;
+    heading.style.cssText = `
+      font-size:17px;
+      margin-bottom:8px;
+    `;
+    const copy = createElement();
+    copy.className = "help-copy";
+    copy.style.fontSize = "15px";
+    copy.innerText = text;
+    block.append(heading, copy);
+    return block;
+  };
+
+  helpGrid.append(
+    makeHelpBlock(
+      "Goal",
+      "Keep demand moving by building short, reliable routes from houses to matching business parks.",
+    ),
+    makeHelpBlock(
+      "Build",
+      "Drag from an existing road or driveway to place streets and connect new homes.",
+    ),
+    makeHelpBlock(
+      "Remove",
+      "Right-click roads to remove them when a cleaner route opens up.",
+    ),
+  );
+
+  const helpOptions = createElement();
+  helpOptions.style.cssText = `
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:22px;
+  `;
+  helpOptions.innerHTML = `
+    <span class="help-pill">Audio: All / Mute / Music / Effects</span>
+    <span class="help-pill">Grid: Auto / On</span>
+    <span class="help-pill">Pause: plan safely</span>
+  `;
+
+  const helpShortcuts = createElement();
+  helpShortcuts.style.cssText = `
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    align-items:center;
+    margin-top:24px;
+  `;
+  helpShortcuts.innerHTML = `
+    <span class="help-shortcut"><span class="help-kbd">Space</span><span>Pause</span></span>
+    <span class="help-shortcut"><span class="help-kbd">M</span><span>Mute</span></span>
+    <span class="help-shortcut"><span class="help-kbd">S</span><span>New Song</span></span>
+    <span class="help-shortcut"><span class="help-kbd">RMB</span><span>Remove road</span></span>
+  `;
+
+  helpCloseButton.innerText = "Continue";
+  helpCloseButton.style.cssText = `
+    margin-top:28px;
+    height:48px;
+    padding:0 22px;
+    font-size:20px;
+    background:${colors.ui};
+    color:#fff;
+    pointer-events:all;
+  `;
+
+  helpPanel.append(
+    helpTitle,
+    helpIntro,
+    helpGrid,
+    helpOptions,
+    helpShortcuts,
+    helpCloseButton,
+  );
+  helpOverlay.append(helpPanel);
 
   motorwayIndicator.style.cssText = `
     position: absolute;
@@ -424,7 +781,7 @@ export const initUi = () => {
   motorwayIndicator.append(motorwaySvg, motorwayIndicatorCount);
 
   motorwayIndicator.addEventListener("click", () => {
-    if (session.motorways > 0) setMotorwayMode(!motorwayMode);
+    if (developerMode || session.motorways > 0) setMotorwayMode(!motorwayMode);
   });
 
   bridgeIndicator.style.cssText = `
@@ -476,15 +833,17 @@ export const initUi = () => {
     pathTilesIndicator,
     motorwayIndicator,
     bridgeIndicator,
-    gridRedToggleTooltip,
-    gridRedToggleButton,
+    helpOverlay,
+    helpButton,
+    audioModeButton,
     gridToggleTooltip,
     gridToggleButton,
   );
+  document.body.append(developerModeButton);
 };
 
 export const resetHudCounters = (): void => {
-  pathTilesIndicatorCount.innerText = String(session.paths);
+  updateInventoryCounters();
   pickupCount.innerText = "0";
   resetUpgradeCharge();
 };
@@ -492,5 +851,8 @@ export const resetHudCounters = (): void => {
 export const hideGameHud = (): void => {
   clock.style.opacity = "0";
   pathTilesIndicator.style.opacity = "0";
+  motorwayIndicator.style.opacity = "0";
+  bridgeIndicator.style.opacity = "0";
+  setGameplayControlsVisible(false);
   pauseButton.style.opacity = "0";
 };

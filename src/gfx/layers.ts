@@ -67,6 +67,27 @@ const addMotorwayDashLayer = (): SVGGElement => {
   return layer;
 };
 
+const addPendingStreetLayer = (): SVGGElement => {
+  const layer = createSvgElement("g");
+  layer.setAttribute("stroke-linecap", "round");
+  layer.setAttribute("stroke-linejoin", "round");
+  layer.setAttribute("fill", "none");
+  layer.setAttribute("stroke-width", String(3.14));
+  layer.setAttribute("opacity", String(0.38));
+  svgElement.append(layer);
+  return layer;
+};
+
+const addActiveStreetLayer = (): SVGGElement => {
+  const layer = createSvgElement("g");
+  layer.setAttribute("stroke-linecap", "round");
+  layer.setAttribute("stroke-linejoin", "round");
+  layer.setAttribute("fill", "none");
+  layer.setAttribute("stroke-width", String(3.14));
+  svgElement.append(layer);
+  return layer;
+};
+
 const addCommuterLayer = (): SVGGElement => {
   const commuterLayer = createSvgElement("g");
   commuterLayer.setAttribute("stroke-linecap", "round");
@@ -142,8 +163,10 @@ addGridToSvg();
 export const gridBlockLayer = addGridBlockLayer();
 export const baseLayer = addBaseLayer();
 export const streetShadowLayer = addStreetShadowLayer();
-export const motorwayEdgeLayer = addMotorwayEdgeLayer();
 export const streetLayer = addStreetLayer();
+export const pendingStreetLayer = addPendingStreetLayer();
+export const activeStreetLayer = addActiveStreetLayer();
+export const motorwayEdgeLayer = addMotorwayEdgeLayer();
 export const motorwayDashLayer = addMotorwayDashLayer();
 export const houseShadowLayer = addHouseShadowLayer();
 export const commuterLayer = addCommuterLayer();
@@ -161,6 +184,8 @@ export const clearLayers = (): void => {
   gridBlockLayer.innerHTML = "";
   streetLayer.innerHTML = "";
   streetShadowLayer.innerHTML = "";
+  pendingStreetLayer.innerHTML = "";
+  activeStreetLayer.innerHTML = "";
   motorwayEdgeLayer.innerHTML = "";
   motorwayDashLayer.innerHTML = "";
   commuterLayer.innerHTML = "";
