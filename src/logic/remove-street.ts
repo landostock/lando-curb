@@ -16,6 +16,15 @@ const streetTouchesCell = (street: Street, { x, y }: Cell): boolean => {
   return (x === p0.x && y === p0.y) || (x === p1.x && y === p1.y);
 };
 
+const commuterIsOnStreet = (
+  street: Street,
+  c: (typeof commuters)[number],
+): boolean =>
+  (c.state === "toWork" || c.state === "toHome") &&
+  !!c.lastTraversed &&
+  !!c.route[0] &&
+  streetMatchesEdge(street, c.lastTraversed, c.route[0]);
+
 /**
  * Invariant: a street stays pending while any non-home commuter's home↔workplace round
  * trip would break without it. When every active commuter has an alternative, removal
@@ -31,6 +40,7 @@ const commuterStillNeedsStreet = (
   const workCells = c.workplace.points;
 
   if (c.state === "toHome") {
+    if (commuterIsOnStreet(street, c)) return true;
     if (!routeUsesStreet(c.route, street)) return false;
     if (!c.route[0]) return true;
     return !findRoute({ from: c.route[0], to: [homeCell], exclude: street });
@@ -44,6 +54,7 @@ const commuterStillNeedsStreet = (
 
   if (c.state === "toWork") {
     const destination = c.destination;
+    if (commuterIsOnStreet(street, c)) return true;
     if (!destination) return routeUsesStreet(c.route, street);
 
     const returnRoute = findRoute({

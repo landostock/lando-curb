@@ -9,6 +9,9 @@ const MIN_YIELD_SPEED = 0.14;
 const MIN_FOLLOW_SPEED = 0.12;
 const MOTORWAY_SPEED_MULTIPLIER = 5;
 const MOTORWAY_RAMP_PX = 6;
+const JUNCTION_BUSY_RADIUS2 = 12 * 12;
+const CORRIDOR_PRESSURE_RADIUS = 14;
+const CORRIDOR_LATERAL_LIMIT = 3.6;
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
@@ -58,12 +61,19 @@ const exitIsBlocked = (c: Commuter): boolean => {
 const applyIntersectionRules = (c: Commuter, speed: number): number => {
   const intPt = toSvgPoint(c.route[0]!);
   const myDist2 = (c.x - intPt.x) ** 2 + (c.y - intPt.y) ** 2;
+  const conn = neighborCount(c.route[0]!);
 
   if (exitIsBlocked(c)) return Math.min(speed, MIN_YIELD_SPEED);
 
   let hasCompetitor = false;
+  let crossTraffic = 0;
+  let junctionLoad = 0;
   for (const other of getNearby(intPt.x, intPt.y)) {
     if (other === c || isOffRoadState(other)) continue;
+    const otherNearJunction =
+      (other.x - intPt.x) ** 2 + (other.y - intPt.y) ** 2 <
+      JUNCTION_BUSY_RADIUS2;
+    if (otherNearJunction) junctionLoad++;
     if (other.route.length < 2) continue;
     if (
       other.route[0]!.x !== c.route[0]!.x ||
@@ -82,6 +92,7 @@ const applyIntersectionRules = (c: Commuter, speed: number): number => {
     if (other.dx * toIntX + other.dy * toIntY < 0) continue;
 
     hasCompetitor = true;
+    crossTraffic++;
 
     const otherDist2 = (other.x - intPt.x) ** 2 + (other.y - intPt.y) ** 2;
     const otherWins =
@@ -94,9 +105,11 @@ const applyIntersectionRules = (c: Commuter, speed: number): number => {
 
   // Cautious approach only when cross-traffic is actually present.
   if (hasCompetitor) {
-    const conn = neighborCount(c.route[0]!);
-    speed *= conn > 4 ? 0.88 : conn > 3 ? 0.93 : 0.97;
+    const complexity = conn > 4 ? 0.84 : conn > 3 ? 0.9 : 0.95;
+    const traffic = crossTraffic > 2 ? 0.82 : crossTraffic > 1 ? 0.9 : 1;
+    speed *= complexity * traffic;
   }
+  if (junctionLoad >= 3 && conn > 3) speed *= junctionLoad >= 5 ? 0.8 : 0.88;
   return speed;
 };
 
@@ -117,6 +130,42 @@ const applyFollowingDistance = (c: Commuter, speed: number): number => {
   return speed;
 };
 
+const applyCorridorPressure = (c: Commuter, speed: number): number => {
+  let pressure = 0;
+
+  for (const other of getNearby(c.x, c.y)) {
+    if (other === c || isOffRoadState(other)) continue;
+    const ddx = other.x - c.x;
+    const ddy = other.y - c.y;
+    const dist2 = ddx * ddx + ddy * ddy;
+    if (dist2 > CORRIDOR_PRESSURE_RADIUS * CORRIDOR_PRESSURE_RADIUS) continue;
+
+    const forward = ddx * c.dx + ddy * c.dy;
+    if (forward <= 0) continue;
+
+    const lateral = Math.abs(c.dx * ddy - c.dy * ddx);
+    if (lateral > CORRIDOR_LATERAL_LIMIT) continue;
+
+    const sameNextCell =
+      !!c.route[0] &&
+      !!other.route[0] &&
+      c.route[0].x === other.route[0].x &&
+      c.route[0].y === other.route[0].y;
+    const sameDestination =
+      !!c.destination &&
+      !!other.destination &&
+      c.destination.x === other.destination.x &&
+      c.destination.y === other.destination.y;
+
+    if (sameNextCell || sameDestination || dist2 < 8 * 8) pressure++;
+  }
+
+  if (pressure <= 1) return speed;
+  if (pressure === 2) return speed * 0.9;
+  if (pressure === 3) return speed * 0.8;
+  return speed * 0.7;
+};
+
 /** Desired speed for this tick: curvature-limited base, motorway boost, short-route penalty,
  *  intersection yielding/don't-block-the-box, following distance. Pure — no side effects. */
 export const computeTargetSpeed = (c: Commuter): number => {
@@ -133,6 +182,7 @@ export const computeTargetSpeed = (c: Commuter): number => {
     speed = applyIntersectionRules(c, speed);
   }
 
+  speed = applyCorridorPressure(c, speed);
   return Math.max(MIN_ROAD_SPEED, applyFollowingDistance(c, speed));
 };
 

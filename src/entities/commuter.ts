@@ -15,6 +15,7 @@ import {
 } from "../logic/find-route";
 import { commuters } from "../state";
 import type { Cell, Pixel } from "../types";
+import { samePoint } from "../util/geometry";
 import type { BusinessPark } from "./business-park";
 import { addCommuterToSvg, renderCommuter } from "./commuter.render";
 
@@ -115,7 +116,17 @@ export class Commuter extends GameObjectClass {
 
   /** Mid-transit route change. State unchanged; momentum preserved. */
   private smoothReroute(route: Cell[]) {
+    const currentEdgeStart = this.lastTraversed;
+    const currentEdgeEnd = this.route[0] ?? null;
     this.setRoute(route);
+    if (
+      currentEdgeStart &&
+      currentEdgeEnd &&
+      this.route[0] &&
+      samePoint(currentEdgeEnd, this.route[0])
+    ) {
+      this.lastTraversed = currentEdgeStart;
+    }
     this.railState = this.buildTransitionRail(route);
   }
 

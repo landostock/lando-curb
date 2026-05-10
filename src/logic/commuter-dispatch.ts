@@ -20,6 +20,7 @@ const findBestDispatch = (
     (c) =>
       c.state === "home" &&
       bp.types.includes(c.type) &&
+      !(c.parent && "homeActionHold" in c.parent && c.parent.homeActionHold) &&
       !excludedParents.has(c.parent) &&
       !isCarLeavingSameHome(c),
   );

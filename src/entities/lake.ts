@@ -192,7 +192,11 @@ const getRiverCells = (waypoints: Point[], radius: number): Cell[] => {
 
 const renderRiver = (d: string, width: number): void => {
   // Three co-layered strokes: green edge, blue water, blurred highlight.
-  const stroke = (color: string, w: number, extras: (el: SVGElement) => void = () => {}): SVGElement => {
+  const stroke = (
+    color: string,
+    w: number,
+    extras?: (el: SVGElement) => void,
+  ): SVGElement => {
     const p = createSvgElement("path");
     p.setAttribute("d", d);
     p.setAttribute("fill", "none");
@@ -200,7 +204,7 @@ const renderRiver = (d: string, width: number): void => {
     p.setAttribute("stroke-width", String(w));
     p.setAttribute("stroke-linecap", "round");
     p.setAttribute("stroke-linejoin", "round");
-    extras(p);
+    extras?.(p);
     return p;
   };
   const edge = stroke("#9b6", width + 2);

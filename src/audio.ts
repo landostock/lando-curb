@@ -527,6 +527,48 @@ export const playAppearChime = (): void => {
   }, 65);
 };
 
+export const playHomeSwapPop = (): void => {
+  markMusicActivity(0.28);
+  playTone({
+    frequency: 470 + Math.random() * 40,
+    duration: 0.07,
+    volume: 0.05,
+    type: "sine",
+    bend: 1.36,
+  });
+  setTimeout(() => {
+    playTone({
+      frequency: 705 + Math.random() * 55,
+      duration: 0.08,
+      volume: 0.032,
+      type: "triangle",
+      bend: 1.18,
+    });
+  }, 55);
+};
+
+export const playHouseDemolish = (): void => {
+  markMusicActivity(0.44);
+  playTone({
+    frequency: 138 + Math.random() * 24,
+    duration: 0.16,
+    volume: 0.11,
+    type: "sawtooth",
+    bend: 0.55,
+    lowpass: 780,
+  });
+  setTimeout(() => {
+    playTone({
+      frequency: 92 + Math.random() * 16,
+      duration: 0.2,
+      volume: 0.06,
+      type: "triangle",
+      bend: 0.72,
+      lowpass: 520,
+    });
+  }, 75);
+};
+
 export const playUpgradeSound = (): void => {
   markMusicActivity(0.38);
   playTone({ frequency: 392, duration: 0.12, volume: 0.045, bend: 1.5 });

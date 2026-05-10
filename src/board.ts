@@ -21,8 +21,11 @@ const start = centerOf(10, 7);
 
 export const board: Rect = { ...start };
 
+let maxGrowthEntityCount = 0;
+
 export const growBoard = (entityCount: number): void => {
-  const t = Math.min(1, entityCount / 60);
+  maxGrowthEntityCount = Math.max(maxGrowthEntityCount, entityCount);
+  const t = Math.min(1, maxGrowthEntityCount / 60);
   board.width = Math.round(start.width + (max.width - start.width) * t);
   board.height = Math.round(start.height + (max.height - start.height) * t);
   board.x = Math.floor((grid.width - board.width) / 2);
@@ -30,6 +33,7 @@ export const growBoard = (entityCount: number): void => {
 };
 
 export const resetBoard = (): void => {
+  maxGrowthEntityCount = 0;
   board.x = start.x;
   board.y = start.y;
   board.width = start.width;

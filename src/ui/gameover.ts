@@ -30,6 +30,10 @@ const menuButton = createElement("button");
 const scoreWrapper = createElement();
 const highscoreText = createElement();
 export const toggleGameoverlayButton = createElement("button");
+const restoreGameoverOverlayButton = createElement("button");
+const mapScoreHud = createElement();
+const mapScoreText = createElement();
+const mapHighscoreText = createElement();
 
 export const initGameover = (
   startNewGame: () => void,
@@ -93,7 +97,16 @@ export const initGameover = (
 
   menuButton.addEventListener("click", gameoverToMenu);
 
-  gameoverButtons.append(restartButtonWrapper, menuButtonWrapper);
+  toggleGameoverlayButton.innerText = "Hide Overlay";
+  toggleGameoverlayButton.addEventListener("click", toggleGameoverlay);
+  const toggleButtonWrapper = createElement();
+  toggleButtonWrapper.append(toggleGameoverlayButton);
+
+  gameoverButtons.append(
+    restartButtonWrapper,
+    menuButtonWrapper,
+    toggleButtonWrapper,
+  );
   gameoverButtons.style.cssText = `gap: 16px; margin-top: 48px;`;
   const layoutButtons = () => {
     const compact = document.body.scrollHeight < 500;
@@ -105,11 +118,38 @@ export const initGameover = (
   layoutButtons();
   addEventListener("resize", layoutButtons);
 
-  toggleGameoverlayButton.style.cssText = `position: absolute; top: 10vmin; right: 10vmin`;
+  toggleGameoverlayButton.style.cssText = "";
   toggleGameoverlayButton.style.pointerEvents = "none";
   toggleGameoverlayButton.style.opacity = "0";
-  toggleGameoverlayButton.innerText = "Overlay On/Off";
-  toggleGameoverlayButton.addEventListener("click", toggleGameoverlay);
+  restoreGameoverOverlayButton.innerText = "Show Overlay";
+  restoreGameoverOverlayButton.style.cssText = `
+    position:absolute;
+    right:16px;
+    bottom:16px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s;
+    z-index:4;
+  `;
+  restoreGameoverOverlayButton.addEventListener("click", toggleGameoverlay);
+
+  mapScoreHud.style.cssText = `
+    position:absolute;
+    display:grid;
+    gap:2px;
+    padding:10px 14px;
+    border-radius:16px;
+    background:rgba(247,247,240,.88);
+    color:${colors.ui};
+    box-shadow:0 8px 24px rgba(20,24,16,.18), inset 0 0 0 1px rgba(68,68,51,.12);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s;
+    z-index:5;
+  `;
+  mapScoreText.style.cssText = `font-size:18px;line-height:1;font-weight:900;`;
+  mapHighscoreText.style.cssText = `font-size:14px;line-height:1.15;font-weight:800;`;
+  mapScoreHud.append(mapScoreText, mapHighscoreText);
 
   gameoverWrapper.append(
     gameoverHeader,
@@ -119,7 +159,46 @@ export const initGameover = (
     gameoverButtons,
   );
 
-  document.body.append(gameoverWrapper, toggleGameoverlayButton);
+  document.body.append(gameoverWrapper, restoreGameoverOverlayButton, mapScoreHud);
+};
+
+export const showGameoverMapControls = (): void => {
+  const mapRect = svgElement.getBoundingClientRect();
+  const buttonWidth = restoreGameoverOverlayButton.offsetWidth || 130;
+  const gap = 14;
+  const rightSpace = window.innerWidth - mapRect.right;
+  const leftSpace = mapRect.left;
+  restoreGameoverOverlayButton.style.bottom = "";
+  restoreGameoverOverlayButton.style.right = "";
+  restoreGameoverOverlayButton.style.left = "";
+  restoreGameoverOverlayButton.style.top = "";
+  if (rightSpace >= buttonWidth + gap) {
+    restoreGameoverOverlayButton.style.left = `${mapRect.right + gap}px`;
+    restoreGameoverOverlayButton.style.top = `${mapRect.top + gap}px`;
+    mapScoreHud.style.right = "";
+    mapScoreHud.style.left = `${mapRect.left + gap}px`;
+  } else if (leftSpace >= buttonWidth + gap) {
+    restoreGameoverOverlayButton.style.left = `${gap}px`;
+    restoreGameoverOverlayButton.style.top = `${mapRect.top + gap}px`;
+    mapScoreHud.style.left = "";
+    mapScoreHud.style.right = `${gap}px`;
+  } else {
+    restoreGameoverOverlayButton.style.right = "16px";
+    restoreGameoverOverlayButton.style.bottom = "16px";
+    mapScoreHud.style.left = "16px";
+    mapScoreHud.style.right = "";
+  }
+  mapScoreHud.style.top = `${mapRect.top + gap}px`;
+  mapScoreHud.style.bottom = "";
+  mapScoreHud.style.opacity = "1";
+  restoreGameoverOverlayButton.style.opacity = "1";
+  restoreGameoverOverlayButton.style.pointerEvents = "all";
+};
+
+export const hideGameoverMapControls = (): void => {
+  restoreGameoverOverlayButton.style.opacity = "0";
+  restoreGameoverOverlayButton.style.pointerEvents = "none";
+  mapScoreHud.style.opacity = "0";
 };
 
 export const showGameover = (): void => {
@@ -141,11 +220,14 @@ export const showGameover = (): void => {
   restartButtonWrapper.style.transition = `opacity .5s 2.5s`;
   menuButtonWrapper.style.transition = `opacity .5s 3s`;
   toggleGameoverlayButton.style.transition = `all .2s, opacity .5s 3.5s`;
+  hideGameoverMapControls();
 
   const previousHighscore = Number(localStorage.getItem("Lando Curb") ?? 0);
   const highscore = Math.max(score, previousHighscore);
   scoreWrapper.innerText = `Score: ${score}`;
   highscoreText.innerText = `Highscore: ${highscore}`;
+  mapScoreText.innerText = `Score: ${score}`;
+  mapHighscoreText.innerText = `Highscore: ${highscore}`;
 
   const pickupCount = createElement("u");
   pickupCount.innerText = `${session.pickups} deliveries`;
@@ -173,6 +255,7 @@ export const showGameover = (): void => {
     restartButtonWrapper.style.opacity = "1";
     menuButtonWrapper.style.opacity = "1";
     toggleGameoverlayButton.style.opacity = "1";
+    toggleGameoverlayButton.style.pointerEvents = "all";
   });
 };
 
@@ -199,6 +282,7 @@ export const prepareRestart = (): void => {
   toggleGameoverlayButton.style.opacity = "0";
   toggleGameoverlayButton.style.pointerEvents = "none";
   toggleGameoverlayButton.style.transition = `all .2s, opacity .5s`;
+  hideGameoverMapControls();
 };
 
 export const transitionGameoverToMenu = (
@@ -211,6 +295,7 @@ export const transitionGameoverToMenu = (
   toggleGameoverlayButton.style.opacity = "0";
   toggleGameoverlayButton.style.pointerEvents = "none";
   toggleGameoverlayButton.style.transition = `all .2s, opacity .5s`;
+  hideGameoverMapControls();
 
   gridToggleTooltip.style.transition = `all .2s, width .5s 4s, opacity .5s 4s`;
   gridToggleButton.style.transition = `all .2s, width .5s 4s, opacity .5s 4s`;
@@ -248,6 +333,8 @@ export const hideGameover = (): void => {
   gameoverText3.style.opacity = "0";
   restartButtonWrapper.style.opacity = "0";
   menuButtonWrapper.style.opacity = "0";
+  toggleGameoverlayButton.style.pointerEvents = "none";
+  toggleGameoverlayButton.style.opacity = "0";
 
   // Remove from DOM once invisible — backdrop-filter and opacity stacking contexts
   // on full-screen elements interfere with game element z-ordering while hidden.

@@ -15,7 +15,13 @@ export const landmarks: Cell[] = [];
 export const reservedAreas: Cell[] = [];
 export const streets: Street[] = [];
 export const trees: Tree[] = [];
-export const session = { paths: 18, motorways: 0, bridges: 0, pickups: 0 };
+export const session = {
+  paths: 18,
+  motorways: 0,
+  bridges: 0,
+  homeActions: 0,
+  pickups: 0,
+};
 
 export const addBusinessPark = (bp: BusinessPark) => {
   businessParks.push(bp);
@@ -42,11 +48,21 @@ export const addTree = (t: Tree) => {
   trees.push(t);
 };
 
+export const removeCommuter = (c: Commuter) => {
+  const index = commuters.indexOf(c);
+  if (index >= 0) commuters.splice(index, 1);
+};
+export const removeHouse = (h: House) => {
+  const index = houses.indexOf(h);
+  if (index >= 0) houses.splice(index, 1);
+};
 export const removeStreet = (s: Street) => {
-  streets.splice(streets.indexOf(s), 1);
+  const index = streets.indexOf(s);
+  if (index >= 0) streets.splice(index, 1);
 };
 export const removeTree = (t: Tree) => {
-  trees.splice(trees.indexOf(t), 1);
+  const index = trees.indexOf(t);
+  if (index >= 0) trees.splice(index, 1);
 };
 
 export const resetState = (): void => {
@@ -61,5 +77,6 @@ export const resetState = (): void => {
   session.paths = 18;
   session.motorways = 0;
   session.bridges = 0;
+  session.homeActions = 0;
   session.pickups = 0;
 };

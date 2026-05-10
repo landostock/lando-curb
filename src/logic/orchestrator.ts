@@ -62,7 +62,10 @@ const revealHudMilestones = (tick: number): void => {
     motorwayIndicator.style.opacity = "1";
     setGameplayControlsVisible(true);
   }
-  if (tick === TIMING.hud.clock) clock.style.opacity = "1";
+  if (tick === TIMING.hud.clock) {
+    clock.style.opacity = "1";
+    clock.style.pointerEvents = "all";
+  }
   if (tick === TIMING.hud.pause) pauseButton.style.opacity = "1";
 };
 

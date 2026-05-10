@@ -11,6 +11,8 @@ import {
   addCommuter,
   addStreet,
   houses,
+  removeCommuter,
+  removeHouse,
   removeStreet,
 } from "../state";
 import type { Cell, Direction } from "../types";
@@ -23,8 +25,14 @@ export class House extends GameObjectClass {
   declare facing: Direction;
   declare type: string;
   declare style: string;
+  homeActionHold = false;
   svgGroup!: SVGGElement;
   shadow!: SVGRectElement;
+  private baseShadow?: SVGCircleElement;
+  private roof?: SVGRectElement;
+  private streetDrawTimer?: ReturnType<typeof setTimeout>;
+  private commuterSpawnTimer?: ReturnType<typeof setTimeout>;
+  private removed = false;
 
   private get svgPos() {
     return toSvgPoint(this);
@@ -51,11 +59,13 @@ export class House extends GameObjectClass {
     });
     addStreet(this.startPath);
 
-    setTimeout(() => {
+    this.streetDrawTimer = setTimeout(() => {
+      if (this.removed) return;
       drawStreets({ noShadow: true });
     }, 1000);
 
-    setTimeout(() => {
+    this.commuterSpawnTimer = setTimeout(() => {
+      if (this.removed) return;
       const c1 = new Commuter({ x: this.x, y: this.y, parent: this });
       const c2 = new Commuter({ x: this.x, y: this.y, parent: this });
       addCommuter(c1);
@@ -168,6 +178,7 @@ export class House extends GameObjectClass {
     baseShadow.style.opacity = "0";
     baseShadow.style.transition = `all .4s`;
     baseLayer.append(baseShadow);
+    this.baseShadow = baseShadow;
     setTimeout(() => {
       baseShadow.setAttribute("r", String(3));
       baseShadow.style.opacity = "1";
@@ -190,6 +201,8 @@ export class House extends GameObjectClass {
     roof.setAttribute("height", String(dim.h));
     roof.setAttribute("rx", String(dim.rx));
     roof.setAttribute("fill", isPlattenbau ? colors.plattenbau : this.type);
+    roof.style.transition = "fill .45s ease";
+    this.roof = roof;
 
     this.svgGroup.style.willChange = "transform";
     this.svgGroup.style.transition = "transform .4s cubic-bezier(.5,2,.5,1)";
@@ -260,5 +273,32 @@ export class House extends GameObjectClass {
 
     this.svgGroup.style.transition = "transform .3s";
     this.svgGroup.style.transform = `translate(${x}px,${y}px) scale(1)`;
+  }
+
+  setType(type: string): void {
+    this.type = type;
+    if (this.style !== "plattenbau") this.roof?.setAttribute("fill", type);
+    for (const child of this.children) {
+      if (!(child instanceof Commuter)) continue;
+      child.type = type;
+      child.svgElement.querySelector("rect")?.setAttribute("fill", type);
+    }
+  }
+
+  remove(): void {
+    this.removed = true;
+    clearTimeout(this.streetDrawTimer);
+    clearTimeout(this.commuterSpawnTimer);
+    for (const child of [...this.children]) {
+      if (!(child instanceof Commuter)) continue;
+      child.svgElement.remove();
+      removeCommuter(child);
+    }
+    this.children.length = 0;
+    this.startPath?.remove();
+    this.svgGroup.remove();
+    this.shadow.remove();
+    this.baseShadow?.remove();
+    removeHouse(this);
   }
 }

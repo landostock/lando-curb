@@ -1,6 +1,7 @@
 import { colors } from "../gfx/colors";
 import { createElement, createSvgElement } from "../gfx/svg-utils";
-import { session } from "../state";
+import { lakes, session } from "../state";
+import { APP_VERSION } from "../version";
 
 export const uiContainer = createElement();
 
@@ -24,8 +25,19 @@ export const setMotorwayMode = (on: boolean): void => {
 export const bridgeIndicator = createElement();
 export const bridgeIndicatorCount = createElement();
 
+export const homeActionIndicator = createElement("button");
+export const homeActionIndicatorCount = createElement();
+
 export const developerModeButton = createElement("button");
 export let developerMode = false;
+let gameplayControlsVisible = false;
+let developerModeButtonSuppressed = false;
+let developerModeAccessGranted = false;
+
+const updateHomeActionPosition = (): void => {
+  const bridgeSlotVisible = lakes.length > 0 || session.bridges > 0;
+  homeActionIndicator.style.bottom = bridgeSlotVisible ? "308px" : "212px";
+};
 
 export const updateInventoryCounters = (): void => {
   pathTilesIndicatorCount.innerText = developerMode ? "∞" : String(session.paths);
@@ -35,6 +47,10 @@ export const updateInventoryCounters = (): void => {
   bridgeIndicatorCount.innerText = developerMode
     ? "∞"
     : String(session.bridges);
+  homeActionIndicatorCount.innerText = developerMode
+    ? "∞"
+    : String(session.homeActions);
+  updateHomeActionPosition();
 };
 
 const setDeveloperModeButtonState = (): void => {
@@ -52,21 +68,49 @@ const setDeveloperModeButtonState = (): void => {
     : `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
 };
 
-export const enableDeveloperMode = (): void => {
+export const enableDeveloperMode = ({
+  skipConfirm = false,
+}: { skipConfirm?: boolean } = {}): void => {
   if (developerMode) return;
-  const confirmed = window.confirm(
-    "Developer Mode is for testing. It gives unlimited roads, bridges, and motorways, and it cannot be turned off for this game. Resource counts and scoring are no longer comparable to a normal run. Enable Developer Mode?",
-  );
+  const confirmed =
+    skipConfirm ||
+    window.confirm(
+      "Developer Mode is for testing. It gives unlimited roads, bridges, and motorways, and it cannot be turned off for this game. Resource counts and scoring are no longer comparable to a normal run. Enable Developer Mode?",
+    );
   if (!confirmed) return;
   developerMode = true;
+  developerModeAccessGranted = true;
   setDeveloperModeButtonState();
   updateInventoryCounters();
+  updateDeveloperModeButtonVisibility();
+};
+
+export const grantDeveloperModeAccess = (): void => {
+  developerModeAccessGranted = true;
+  updateDeveloperModeButtonVisibility();
+};
+
+export const requestDeveloperModeAccess = (): void => {
+  if (developerMode) return;
+  grantDeveloperModeAccess();
 };
 
 export const resetDeveloperMode = (): void => {
   developerMode = false;
+  developerModeAccessGranted = false;
   setDeveloperModeButtonState();
   updateInventoryCounters();
+  updateDeveloperModeButtonVisibility();
+};
+
+const updateDeveloperModeButtonVisibility = (): void => {
+  const visible =
+    gameplayControlsVisible &&
+    !developerModeButtonSuppressed &&
+    (developerModeAccessGranted || developerMode);
+  developerModeButton.style.opacity = visible ? "1" : "0";
+  developerModeButton.style.visibility = visible ? "visible" : "hidden";
+  developerModeButton.style.pointerEvents = visible ? "all" : "none";
 };
 
 export const pauseButton = createElement("button");
@@ -150,6 +194,7 @@ export const helpButton = createElement("button");
 export const helpOverlay = createElement();
 export const helpPanel = createElement();
 export const helpCloseButton = createElement("button");
+export const helpMenuButton = createElement("button");
 
 type AudioMode = "all" | "muted" | "music" | "sfx";
 
@@ -182,14 +227,18 @@ export const setAudioModeButton = (mode: AudioMode): void => {
 };
 
 export const setGameplayControlsVisible = (visible: boolean): void => {
+  gameplayControlsVisible = visible;
   gridToggleButton.style.opacity = visible ? "1" : "0";
   gridToggleButton.style.pointerEvents = visible ? "all" : "none";
   audioModeButton.style.opacity = visible ? "1" : "0";
   audioModeButton.style.pointerEvents = visible ? "all" : "none";
-  developerModeButton.style.opacity = visible ? "1" : "0";
-  developerModeButton.style.visibility = visible ? "visible" : "hidden";
-  developerModeButton.style.pointerEvents = visible ? "all" : "none";
+  updateDeveloperModeButtonVisibility();
   if (!visible) gridToggleTooltip.style.opacity = "0";
+};
+
+export const setDeveloperModeButtonSuppressed = (suppressed: boolean): void => {
+  developerModeButtonSuppressed = suppressed;
+  updateDeveloperModeButtonVisibility();
 };
 
 // eslint-disable-next-line max-lines-per-function
@@ -327,7 +376,10 @@ export const initUi = () => {
     right: 16px;
     place-items: center;
     border-radius: 64px;
-    background: ${colors.ui}
+    background: ${colors.ui};
+    cursor: pointer;
+    pointer-events: none;
+    touch-action: manipulation
   `;
   clock.style.width = "80px";
   clock.style.height = "80px";
@@ -644,7 +696,7 @@ export const initUi = () => {
   const helpGrid = createElement();
   helpGrid.style.cssText = `
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns:repeat(2, minmax(0, 1fr));
     gap:16px;
     margin-top:24px;
   `;
@@ -679,11 +731,15 @@ export const initUi = () => {
     ),
     makeHelpBlock(
       "Build",
-      "Drag from an existing road or driveway to place streets and connect new homes.",
+      "Drag from an existing road or driveway to place streets. Drag along an existing street to upgrade it into a motorway.",
     ),
     makeHelpBlock(
       "Remove",
       "Right-click roads to remove them when a cleaner route opens up.",
+    ),
+    makeHelpBlock(
+      "Flow",
+      "Cars slow down in tight bottlenecks and busy junctions, so efficient layouts keep the city moving.",
     ),
   );
 
@@ -715,9 +771,38 @@ export const initUi = () => {
     <span class="help-shortcut"><span class="help-kbd">RMB</span><span>Remove road</span></span>
   `;
 
+  const helpActions = createElement();
+  helpActions.style.cssText = `
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-top:28px;
+  `;
+
+  const helpVersion = createElement();
+  helpVersion.innerText = `v${APP_VERSION}`;
+  helpVersion.style.cssText = `
+    justify-self:end;
+    margin-top:10px;
+    font-size:12px;
+    line-height:1;
+    font-weight:800;
+    color:${colors.ui};
+    opacity:.52;
+  `;
+
+  helpMenuButton.innerText = "Menu";
+  helpMenuButton.style.cssText = `
+    height:48px;
+    padding:0 22px;
+    font-size:20px;
+    background:#fff;
+    color:${colors.ui};
+    pointer-events:all;
+  `;
+
   helpCloseButton.innerText = "Continue";
   helpCloseButton.style.cssText = `
-    margin-top:28px;
     height:48px;
     padding:0 22px;
     font-size:20px;
@@ -726,13 +811,16 @@ export const initUi = () => {
     pointer-events:all;
   `;
 
+  helpActions.append(helpMenuButton, helpCloseButton);
+
   helpPanel.append(
     helpTitle,
     helpIntro,
     helpGrid,
     helpOptions,
     helpShortcuts,
-    helpCloseButton,
+    helpActions,
+    helpVersion,
   );
   helpOverlay.append(helpPanel);
 
@@ -740,13 +828,13 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: 104px;
-    left: 20px;
-    border-radius: 20px;
-    background: ${colors.ui};
-    cursor: pointer;
-    pointer-events: all;
-  `;
+    bottom: 116px;
+	  left: 20px;
+	  border-radius: 20px;
+	  background: ${colors.ui};
+	  cursor: default;
+	  pointer-events: none;
+	`;
   motorwayIndicator.style.transform = "rotate(-45deg)";
   motorwayIndicator.style.opacity = "0";
   motorwayIndicator.style.transition = `scale .4s cubic-bezier(.5, 2, .5, 1), opacity 1s, background .2s`;
@@ -780,15 +868,11 @@ export const initUi = () => {
   motorwaySvg.append(motorwaySvgPath);
   motorwayIndicator.append(motorwaySvg, motorwayIndicatorCount);
 
-  motorwayIndicator.addEventListener("click", () => {
-    if (developerMode || session.motorways > 0) setMotorwayMode(!motorwayMode);
-  });
-
   bridgeIndicator.style.cssText = `
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: 188px;
+    bottom: 212px;
     left: 20px;
     border-radius: 20px;
     background: ${colors.ui};
@@ -826,6 +910,54 @@ export const initUi = () => {
   bridgeSvg.append(bridgeSvgPath);
   bridgeIndicator.append(bridgeSvg, bridgeIndicatorCount);
 
+  homeActionIndicator.style.cssText = `
+    position: absolute;
+    display: grid;
+    place-items: center;
+    left: 20px;
+    border-radius: 20px;
+    background: #f7f7f0;
+    cursor: pointer;
+    pointer-events: all;
+    padding: 0;
+  `;
+  updateHomeActionPosition();
+  homeActionIndicator.style.transform = "rotate(-45deg)";
+  homeActionIndicator.style.opacity = "0";
+  homeActionIndicator.style.transition = `scale .4s cubic-bezier(.5, 2, .5, 1), opacity 1s, background .2s`;
+  homeActionIndicator.style.width = "72px";
+  homeActionIndicator.style.height = "72px";
+  homeActionIndicator.title = "Home Action";
+  homeActionIndicator.setAttribute("aria-label", "Home Action");
+  homeActionIndicatorCount.style.cssText = `
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border-radius: 64px;
+    border: 6px solid ${colors.ui};
+    transform: translate(28px,28px) rotate(45deg);
+    font-size: 18px;
+    background: #eee;
+    transition: all .5s;
+  `;
+  homeActionIndicatorCount.style.width = "28px";
+  homeActionIndicatorCount.style.height = "28px";
+  homeActionIndicatorCount.innerText = "0";
+  const homeActionSvg = createSvgElement("svg");
+  homeActionSvg.setAttribute("viewBox", "0 0 18 18");
+  homeActionSvg.style.width = "54px";
+  homeActionSvg.style.height = "54px";
+  homeActionSvg.style.transform = "rotate(45deg)";
+  const homeActionSvgPath = createSvgElement("path");
+  homeActionSvgPath.setAttribute("fill", "none");
+  homeActionSvgPath.setAttribute("stroke", colors.ui);
+  homeActionSvgPath.setAttribute("stroke-linecap", "round");
+  homeActionSvgPath.setAttribute("stroke-linejoin", "round");
+  homeActionSvgPath.setAttribute("stroke-width", String(2));
+  homeActionSvgPath.setAttribute("d", "M3 9.5 9 4l6 5.5M5 8.5V15h8V8.5M7.5 15v-4h3v4");
+  homeActionSvg.append(homeActionSvgPath);
+  homeActionIndicator.append(homeActionSvg, homeActionIndicatorCount);
+
   uiContainer.append(
     scoreCounters,
     clock,
@@ -833,6 +965,7 @@ export const initUi = () => {
     pathTilesIndicator,
     motorwayIndicator,
     bridgeIndicator,
+    homeActionIndicator,
     helpOverlay,
     helpButton,
     audioModeButton,
@@ -850,9 +983,11 @@ export const resetHudCounters = (): void => {
 
 export const hideGameHud = (): void => {
   clock.style.opacity = "0";
+  clock.style.pointerEvents = "none";
   pathTilesIndicator.style.opacity = "0";
   motorwayIndicator.style.opacity = "0";
   bridgeIndicator.style.opacity = "0";
+  homeActionIndicator.style.opacity = "0";
   setGameplayControlsVisible(false);
   pauseButton.style.opacity = "0";
 };

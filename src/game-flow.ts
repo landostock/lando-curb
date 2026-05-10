@@ -5,7 +5,7 @@ import { board, grid, resetBoard } from "./board";
 import { svgPxToDisplayPx } from "./gfx/coords";
 import { clearLayers } from "./gfx/layers";
 import { resetViewBox } from "./gfx/svg";
-import { gridRedHide, gridRedState } from "./input/grid-toggle";
+import { gridHide, gridRedHide, gridRedState } from "./input/grid-toggle";
 import { initDemandBudgets, resetDemandBudgets } from "./logic/demand-budget";
 import { generateRandomMap } from "./logic/generate-map";
 import { resetSpawning } from "./logic/spawning";
@@ -15,9 +15,11 @@ import {
   clearLostFocus,
   focusOnLostPark,
   hideGameover,
+  hideGameoverMapControls,
   initGameover,
   prepareRestart,
   showGameover,
+  showGameoverMapControls,
   transitionGameoverToMenu,
 } from "./ui/gameover";
 import { hideMenu, initMenu, initMenuBackground, showMenu } from "./ui/menu";
@@ -42,6 +44,13 @@ export const gameState = {
 };
 
 let loop: GameLoop;
+
+const menuFocusFallback = () => ({
+  x: board.x + board.width / 2,
+  y: board.y + board.height / 2,
+  width: 0,
+  height: 0,
+});
 
 const startGame = (): void => {
   if (!gameState.gameStarted) {
@@ -123,15 +132,51 @@ const gameoverToMenu = (): void => {
   });
 };
 
+export const returnToMenu = (): void => {
+  gameState.gameStarted = false;
+  gameState.gameOverlayHidden = false;
+  loop.stop();
+  fadeOutGameMusic();
+  hideGameHud();
+  gridHide();
+  gridRedState.locked = false;
+  gridRedState.on = false;
+  gridRedHide();
+  setMotorwayMode(false);
+
+  resetState();
+  resetDeveloperMode();
+  initDemandBudgets();
+  resetDemandBudgets();
+  resetSpawning();
+  gameState.updateCount = 0;
+  gameState.totalUpdateCount = 0;
+  gameState.renderCount = 0;
+  resetHudCounters();
+  resetUpgrades();
+  resetBoard();
+  resetViewBox();
+  clearLayers();
+  clearLostFocus();
+
+  setTimeout(() => {
+    gameState.currentMap(1200);
+    showMenu(businessParks[0] ?? menuFocusFallback(), true);
+    loop.start();
+  }, 250);
+};
+
 const toggleGameoverlay = (): void => {
   if (gameState.gameOverlayHidden) {
     gameState.gameOverlayHidden = false;
+    hideGameoverMapControls();
     focusOnLostPark(gameState.lostBusinessParkPosition);
     showGameover();
   } else {
     gameState.gameOverlayHidden = true;
     clearLostFocus();
     hideGameover();
+    showGameoverMapControls();
   }
 };
 
@@ -176,12 +221,7 @@ export const bootMenu = (): void => {
   initDemandBudgets();
   generateRandomMap(2500);
   showMenu(
-    businessParks[0] ?? {
-      x: board.x + board.width / 2,
-      y: board.y + board.height / 2,
-      width: 0,
-      height: 0,
-    },
+    businessParks[0] ?? menuFocusFallback(),
     true,
   );
 };

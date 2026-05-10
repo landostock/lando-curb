@@ -1,21 +1,21 @@
 import { grid } from "../board";
+import { gameState } from "../game-flow";
 import { getBoardCell, isPastHalfwayInto } from "../gfx/coords";
 import { gridPointerLayer } from "../gfx/layers";
 import { svgContainerElement, svgElement } from "../gfx/svg";
-import { upgradeStreetToMotorway } from "../logic/motorway-upgrade";
 import {
   cellInLake,
   cellIsBlocked,
   houseInCell,
 } from "../logic/placement-obstacles";
 import { removePath } from "../logic/remove-street";
-import { session, streets } from "../state";
+import { streets } from "../state";
 import type { Cell, Pixel } from "../types";
 import {
-  motorwayIndicator,
-  motorwayIndicatorCount,
-  motorwayMode,
-} from "../ui/ui";
+  handleHomeActionCellClick,
+  isHomeActionActive,
+  isHomeActionPlacingHouse,
+} from "../ui/home-actions";
 import { isAdjacent } from "../util/geometry";
 import { initCarClick } from "./car-click";
 import {
@@ -39,6 +39,18 @@ let lastPointerdownY = 0;
 const DBLCLICK_MS = 350;
 const DBLCLICK_PX2 = 20 * 20;
 
+const gameInputEnabled = (): boolean => gameState.gameStarted;
+
+const cancelPointerInteraction = (): void => {
+  gridHide();
+  gridRedHide();
+  pathDraw.onUp();
+  if (startCell) houseInCell(startCell)?.place();
+  startCell = null;
+  isDragging = false;
+  removeDragPrev = null;
+};
+
 const snapCellTo45 = (start: Cell, px: Pixel): Cell => {
   const c = gridPointerLayer.getBoundingClientRect().width / grid.width;
   const dx = px.x - c * (start.x + 0.5);
@@ -60,19 +72,6 @@ const getCellFromEvent = (event: PointerEvent) => {
     y: event.y - rect.top,
   } as Pixel;
   return { cell: getBoardCell(pointerInRect), pointerInRect };
-};
-
-const edgeFromPointer = (cell: Cell, pointerInRect: Pixel): [Cell, Cell] => {
-  const c = gridPointerLayer.getBoundingClientRect().width / grid.width;
-  const centerX = c * (cell.x + 0.5);
-  const centerY = c * (cell.y + 0.5);
-  const dx = pointerInRect.x - centerX;
-  const dy = pointerInRect.y - centerY;
-  const neighbor =
-    Math.abs(dx) > Math.abs(dy)
-      ? ({ x: cell.x + Math.sign(dx || 1), y: cell.y } as Cell)
-      : ({ x: cell.x, y: cell.y + Math.sign(dy || 1) } as Cell);
-  return [cell, neighbor];
 };
 
 const cellCenterInRect = (cell: Cell): Pixel => {
@@ -136,28 +135,12 @@ const removePathAtPointer = (cell: Cell, pointerInRect: Pixel): void => {
   else removePath(cell);
 };
 
-const flashMotorwayExhausted = (): void => {
-  motorwayIndicator.style.scale = "1.1";
-  motorwayIndicatorCount.innerText = "!";
-  setTimeout(() => {
-    motorwayIndicator.style.scale = "1";
-    motorwayIndicatorCount.innerText = String(session.motorways);
-  }, 300);
-};
-
-const handleDoubleClick = (event: MouseEvent): void => {
-  if (!motorwayMode) return;
-  event.stopImmediatePropagation();
-  event.preventDefault();
-
-  const { cell, pointerInRect } = getCellFromEvent(event as PointerEvent);
-  const [from, to] = edgeFromPointer(cell, pointerInRect);
-  const result = upgradeStreetToMotorway(from, to);
-  if (result === "exhausted") flashMotorwayExhausted();
-};
-
 const handlePointerdown = (event: PointerEvent): void => {
   event.stopPropagation();
+  if (!gameInputEnabled()) {
+    cancelPointerInteraction();
+    return;
+  }
 
   // Suppress the second pointerdown of a double-click so path drawing doesn't
   // fire twice and the path indicator doesn't flash on car double-clicks.
@@ -173,6 +156,11 @@ const handlePointerdown = (event: PointerEvent): void => {
   if (isSecondClick) return;
 
   const { cell, pointerInRect } = getCellFromEvent(event);
+
+  if (event.buttons === 1 && isHomeActionActive()) {
+    handleHomeActionCellClick(cell);
+    return;
+  }
 
   if (event.buttons === 1 && !gridRedState.locked) {
     gridShow();
@@ -197,6 +185,10 @@ const handlePointerdown = (event: PointerEvent): void => {
 
 const handlePointerup = (event: PointerEvent): void => {
   event.stopPropagation();
+  if (!gameInputEnabled()) {
+    cancelPointerInteraction();
+    return;
+  }
   const { cell } = getCellFromEvent(event);
 
   if (cellIsBlocked(cell)) {
@@ -205,6 +197,14 @@ const handlePointerup = (event: PointerEvent): void => {
     svgElement.style.cursor = "grab";
   } else {
     svgElement.style.cursor = "cell";
+  }
+
+  if (isHomeActionActive()) {
+    if (isHomeActionPlacingHouse()) gridShow();
+    else gridHide();
+    gridRedHide();
+    removeDragPrev = null;
+    return;
   }
 
   gridHide();
@@ -222,6 +222,10 @@ const handlePointerup = (event: PointerEvent): void => {
 
 const handlePointermove = (event: PointerEvent): void => {
   event.stopPropagation();
+  if (!gameInputEnabled()) {
+    cancelPointerInteraction();
+    return;
+  }
   const { cell, pointerInRect } = getCellFromEvent(event);
 
   // Removal mode (right-click or locked red grid)
@@ -289,9 +293,11 @@ const handlePointermove = (event: PointerEvent): void => {
 };
 
 export const initPointer = (): void => {
-  svgContainerElement.addEventListener("pointerdown", () => gridRedShow());
+  svgContainerElement.addEventListener("pointerdown", () => {
+    if (gameInputEnabled()) gridRedShow();
+  });
   svgContainerElement.addEventListener("pointermove", (e) => {
-    if ((e as PointerEvent).buttons === 1) {
+    if (gameInputEnabled() && (e as PointerEvent).buttons === 1) {
       gridRedShow();
       gridHide();
     }
@@ -303,6 +309,5 @@ export const initPointer = (): void => {
   gridPointerLayer.addEventListener("pointerdown", handlePointerdown);
   gridPointerLayer.addEventListener("pointermove", handlePointermove);
   gridPointerLayer.addEventListener("pointerup", handlePointerup);
-  gridPointerLayer.addEventListener("dblclick", handleDoubleClick);
   initCarClick();
 };

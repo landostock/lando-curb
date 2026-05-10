@@ -4,7 +4,6 @@ import type { Cell } from "../types";
 import {
   developerMode,
   motorwayIndicatorCount,
-  setMotorwayMode,
 } from "../ui/ui";
 import { streetMatchesEdge } from "./find-route";
 import { commitStreetChanges } from "./orchestrator";
@@ -33,7 +32,6 @@ export const upgradeStreetToMotorway = (
   if (!developerMode) {
     session.motorways--;
     motorwayIndicatorCount.innerText = String(session.motorways);
-    if (session.motorways === 0) setMotorwayMode(false);
   }
 
   commitStreetChanges();

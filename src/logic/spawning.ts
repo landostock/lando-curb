@@ -3,7 +3,7 @@ import { colors } from "../gfx/colors";
 import { businessParks, houses, trees } from "../state";
 import type { Cell, Direction, Point, Rect } from "../types";
 import { pickRandom, shuffle, weightedRandom } from "../util/random";
-import { isAreaFree } from "./placement-obstacles";
+import { isAreaFree, streetWouldClipBuilding } from "./placement-obstacles";
 import { TIMING } from "./timing";
 
 // ─── Random placement ────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ export const getRandomPosition = ({
   maxNumAttempts = 9,
   avoidTrees = true,
   extra = { x: 0, y: 0 },
+  extraStreet,
 }: {
   width?: number;
   height?: number;
@@ -31,6 +32,7 @@ export const getRandomPosition = ({
   maxNumAttempts?: number;
   avoidTrees?: boolean;
   extra?: Point;
+  extraStreet?: { from: Point; to: Point };
 } = {}): Cell | undefined => {
   for (let attempt = 0; attempt < maxNumAttempts; attempt++) {
     const minX = Math.max(board.x, anchor.x - maxDistance);
@@ -73,6 +75,15 @@ export const getRandomPosition = ({
         extra,
         avoidTrees,
       })
+    )
+      continue;
+
+    if (
+      extraStreet &&
+      streetWouldClipBuilding(
+        { x: x + extraStreet.from.x, y: y + extraStreet.from.y } as Cell,
+        { x: x + extraStreet.to.x, y: y + extraStreet.to.y } as Cell,
+      )
     )
       continue;
 
@@ -477,6 +488,10 @@ const placePark = ({
     minDistance: businessParks.length ? 2 : 0,
     maxNumAttempts,
     extra: shape.relativePathPoints[1]!,
+    extraStreet: {
+      from: shape.relativePathPoints[0]!,
+      to: shape.relativePathPoints[1]!,
+    },
     avoidTrees: false,
   });
   if (!pos) return false;
@@ -578,6 +593,7 @@ const trySpawnHouse = (
       minDistance,
       maxDistance,
       extra: facing,
+      extraStreet: { from: { x: 0, y: 0 }, to: facing },
     });
     if (pos) {
       factory!.createHouse({

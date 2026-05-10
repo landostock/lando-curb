@@ -67,6 +67,7 @@ const startW = (board.width + 2) * gridCellSize;
 const startH = (board.height + 2) * gridCellSize;
 const endW = gridSvgWidth * 0.95;
 const endH = gridSvgHeight * 0.95;
+let maxViewEntityCount = 0;
 
 const setVB = (w: number, h: number) =>
   svgElement.setAttribute(
@@ -75,8 +76,12 @@ const setVB = (w: number, h: number) =>
   );
 
 export const updateViewBox = (entityCount: number): void => {
-  const t = Math.sqrt(Math.min(1, entityCount / 60));
+  maxViewEntityCount = Math.max(maxViewEntityCount, entityCount);
+  const t = Math.sqrt(Math.min(1, maxViewEntityCount / 60));
   setVB(startW + (endW - startW) * t, startH + (endH - startH) * t);
 };
 
-export const resetViewBox = (): void => setVB(startW, startH);
+export const resetViewBox = (): void => {
+  maxViewEntityCount = 0;
+  setVB(startW, startH);
+};

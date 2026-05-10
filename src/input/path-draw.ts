@@ -11,6 +11,7 @@ import {
   cellIsBlocked,
   houseInCell,
   samePathInBothCells,
+  streetWouldClipBuilding,
 } from "../logic/placement-obstacles";
 import { addStreet, session } from "../state";
 import type { Cell, Pixel } from "../types";
@@ -20,7 +21,6 @@ import {
   developerMode,
   motorwayIndicator,
   motorwayIndicatorCount,
-  motorwayMode,
   pathTilesIndicator,
   pathTilesIndicatorCount,
 } from "../ui/ui";
@@ -58,11 +58,7 @@ export function onDown(startCell: Cell): void {
   indicator.setAttribute("d", "M0 0l0 0");
   indicator.setAttribute(
     "stroke",
-    cellInLake(startCell)
-      ? colors.bridge
-      : motorwayMode
-        ? colors.motorway
-        : colors.base,
+    cellInLake(startCell) ? colors.bridge : colors.base,
   );
   indicatorWrapper.setAttribute(
     "transform",
@@ -100,15 +96,6 @@ const reserveBuildResource = (needsBridge: boolean): boolean => {
       indicator.style.opacity = "0";
       return false;
     }
-    // Motorway-mode draw that became a bridge — flash the motorway indicator so the player
-    // can see their motorway currency wasn't the one deducted.
-    if (motorwayMode && !developerMode) {
-      flashExhausted(
-        motorwayIndicator,
-        motorwayIndicatorCount,
-        () => session.motorways,
-      );
-    }
     if (!developerMode) {
       session.bridges--;
       bridgeIndicatorCount.innerText = String(session.bridges);
@@ -116,7 +103,7 @@ const reserveBuildResource = (needsBridge: boolean): boolean => {
     return true;
   }
 
-  if (!motorwayMode && !developerMode && session.paths <= 0) {
+  if (!developerMode && session.paths <= 0) {
     flashExhausted(
       pathTilesIndicator,
       pathTilesIndicatorCount,
@@ -164,18 +151,20 @@ export function onMove(
     return "pending";
 
   const needsBridge = cellInLake(startCell) || cellInLake(cell);
+  const existingStreet = samePathInBothCells(startCell, cell);
+  const canUpgradeMotorway =
+    !needsBridge && existingStreet && (developerMode || session.motorways > 0);
 
   // Validate placement BEFORE deducting or flashing "!" — a player dragging over a BP or
   // lake shouldn't see an "out of paths" exhaustion flash.
   if (cellIsBlocked(cell)) return "blocked";
-  if (samePathInBothCells(startCell, cell)) {
-    if (motorwayMode && !needsBridge)
-      return upgradeExistingStreet(startCell, cell);
-    return "blocked";
-  }
+  indicator.setAttribute(
+    "stroke",
+    needsBridge ? colors.bridge : canUpgradeMotorway ? colors.motorway : colors.base,
+  );
+  if (existingStreet) return upgradeExistingStreet(startCell, cell);
+  if (streetWouldClipBuilding(startCell, cell)) return "blocked";
   if (houseInCell(cell)) return "blocked";
-
-  if (motorwayMode && !needsBridge) return "blocked";
 
   if (!reserveBuildResource(needsBridge)) return "exhausted";
 
