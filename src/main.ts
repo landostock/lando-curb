@@ -274,6 +274,17 @@ document.addEventListener(
   "keydown",
   (event) => {
     if (event.key === "Escape") closeHelp();
+    if (
+      !helpOpen &&
+      !event.repeat &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      (event.code === "KeyG" || event.key.toLowerCase() === "g")
+    ) {
+      event.preventDefault();
+      gridLockToggle();
+    }
   },
   { signal },
 );

@@ -766,6 +766,7 @@ export const initUi = () => {
   `;
   helpShortcuts.innerHTML = `
     <span class="help-shortcut"><span class="help-kbd">Space</span><span>Pause</span></span>
+    <span class="help-shortcut"><span class="help-kbd">G</span><span>Grid</span></span>
     <span class="help-shortcut"><span class="help-kbd">M</span><span>Mute</span></span>
     <span class="help-shortcut"><span class="help-kbd">S</span><span>New Song</span></span>
     <span class="help-shortcut"><span class="help-kbd">RMB</span><span>Remove road</span></span>
