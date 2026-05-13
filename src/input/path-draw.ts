@@ -4,6 +4,7 @@ import { colors } from "../gfx/colors";
 import { isPastHalfwayInto } from "../gfx/coords";
 import { streetShadowLayer } from "../gfx/layers";
 import { createSvgElement, toSvgEdge, toSvgPoint } from "../gfx/svg-utils";
+import { streetMatchesEdge } from "../logic/find-route";
 import { upgradeStreetToMotorway } from "../logic/motorway-upgrade";
 import { commitStreetChanges } from "../logic/orchestrator";
 import {
@@ -13,7 +14,7 @@ import {
   samePathInBothCells,
   streetWouldClipBuilding,
 } from "../logic/placement-obstacles";
-import { addStreet, session } from "../state";
+import { addStreet, session, streets } from "../state";
 import type { Cell, Pixel } from "../types";
 import {
   bridgeIndicator,
@@ -35,6 +36,10 @@ indicator.style.transition = transition;
 indicatorWrapper.append(indicator);
 streetShadowLayer.append(indicatorWrapper);
 
+type DragBuildMode = "none" | "street" | "motorway";
+
+let dragBuildMode: DragBuildMode = "none";
+
 /** Half-cell delta in SVG px for a unit-length cell step. */
 const halfCellDelta = (dx: number, dy: number): Pixel =>
   ({ x: toSvgEdge(dx) / 2, y: toSvgEdge(dy) / 2 }) as Pixel;
@@ -54,6 +59,7 @@ const flashExhausted = (
 };
 
 export function onDown(startCell: Cell): void {
+  dragBuildMode = "none";
   const start = toSvgPoint(startCell);
   indicator.setAttribute("d", "M0 0l0 0");
   indicator.setAttribute(
@@ -83,6 +89,19 @@ const upgradeExistingStreet = (startCell: Cell, cell: Cell): MoveResult => {
     return "exhausted";
   }
   return result === "upgraded" ? "placed" : "blocked";
+};
+
+const restorePendingStreet = (startCell: Cell, cell: Cell): boolean => {
+  const pendingStreet = streets.find(
+    (street) =>
+      street.pendingRemoval && streetMatchesEdge(street, startCell, cell),
+  );
+  if (!pendingStreet) return false;
+  pendingStreet.pendingRemoval = false;
+  commitStreetChanges();
+  dragBuildMode = "street";
+  playRoadPop({ bridge: pendingStreet.bridge });
+  return true;
 };
 
 const reserveBuildResource = (needsBridge: boolean): boolean => {
@@ -162,7 +181,14 @@ export function onMove(
     "stroke",
     needsBridge ? colors.bridge : canUpgradeMotorway ? colors.motorway : colors.base,
   );
-  if (existingStreet) return upgradeExistingStreet(startCell, cell);
+  if (existingStreet) {
+    if (restorePendingStreet(startCell, cell)) return "placed";
+    if (dragBuildMode === "street") return "blocked";
+    const result = upgradeExistingStreet(startCell, cell);
+    if (result === "placed") dragBuildMode = "motorway";
+    return result;
+  }
+  if (dragBuildMode === "motorway") return "blocked";
   if (streetWouldClipBuilding(startCell, cell)) return "blocked";
   if (houseInCell(cell)) return "blocked";
 
@@ -182,12 +208,14 @@ export function onMove(
   // Adding a street only ever opens new options — no atWork commuter is stranded.
   commitStreetChanges();
   playRoadPop({ bridge: needsBridge });
+  dragBuildMode = "street";
 
   indicator.style.transition = "";
   return "placed";
 }
 
 export function onUp(): void {
+  dragBuildMode = "none";
   indicator.style.opacity = "0";
   indicator.style.scale = "0";
 }

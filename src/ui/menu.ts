@@ -10,7 +10,9 @@ import {
 import { gameoverWrapper } from "./gameover";
 import {
   gridToggleTooltip,
+  hideGameHud,
   setGameplayControlsVisible,
+  setHelpButtonVisible,
   uiContainer,
 } from "./ui";
 
@@ -205,6 +207,8 @@ export const showMenu = (
   berlinButtonWrapper.style.opacity = "1";
   ostholsteinButtonWrapper.style.opacity = "1";
   gridToggleTooltip.style.opacity = "0";
+  setHelpButtonVisible(true);
+  hideGameHud();
   setGameplayControlsVisible(false);
 };
 

@@ -71,15 +71,6 @@ export const streetWouldClipBuilding = (a: Cell, b: Cell): boolean => {
     isHouseDrivewayEdge(a, b) || isBusinessParkDrivewayEdge(a, b);
   if (allowedDriveway) return false;
   if (cellContainsBuilding(a) || cellContainsBuilding(b)) return true;
-
-  if (a.x !== b.x && a.y !== b.y) {
-    const sideA = { x: a.x, y: b.y } as Cell;
-    const sideB = { x: b.x, y: a.y } as Cell;
-    const sideABusinessPark = businessParkInCell(sideA);
-    const sideBBusinessPark = businessParkInCell(sideB);
-    return !!sideABusinessPark && sideABusinessPark === sideBBusinessPark;
-  }
-
   return false;
 };
 

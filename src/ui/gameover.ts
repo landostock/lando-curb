@@ -3,8 +3,8 @@ import { colors } from "../gfx/colors";
 import { svgPxToDisplayPx } from "../gfx/coords";
 import { clearLayers } from "../gfx/layers";
 import { resetViewBox, svgElement } from "../gfx/svg";
-import { createElement } from "../gfx/svg-utils";
-import { session } from "../state";
+import { createElement, createSvgElement } from "../gfx/svg-utils";
+import { session, streets } from "../state";
 import type { Pixel } from "../types";
 import { menuBackground } from "./menu";
 import {
@@ -14,6 +14,7 @@ import {
   pauseButton,
   scoreCounters,
   setGameplayControlsVisible,
+  setHelpButtonVisible,
   uiContainer,
 } from "./ui";
 
@@ -31,9 +32,13 @@ const scoreWrapper = createElement();
 const highscoreText = createElement();
 export const toggleGameoverlayButton = createElement("button");
 const restoreGameoverOverlayButton = createElement("button");
+const restoreGameoverOverlaySvg = createSvgElement("svg");
+const restoreGameoverOverlayPath = createSvgElement("path");
 const mapScoreHud = createElement();
 const mapScoreText = createElement();
 const mapHighscoreText = createElement();
+const mapRoadText = createElement();
+const mapMotorwayText = createElement();
 
 export const initGameover = (
   startNewGame: () => void,
@@ -121,35 +126,69 @@ export const initGameover = (
   toggleGameoverlayButton.style.cssText = "";
   toggleGameoverlayButton.style.pointerEvents = "none";
   toggleGameoverlayButton.style.opacity = "0";
-  restoreGameoverOverlayButton.innerText = "Show Overlay";
+  restoreGameoverOverlaySvg.setAttribute("viewBox", "0 0 24 24");
+  restoreGameoverOverlaySvg.setAttribute("width", "28");
+  restoreGameoverOverlaySvg.setAttribute("height", "28");
+  restoreGameoverOverlayPath.setAttribute("d", "M7 7 17 17M17 7 7 17");
+  restoreGameoverOverlayPath.setAttribute("fill", "none");
+  restoreGameoverOverlayPath.setAttribute("stroke", colors.ui);
+  restoreGameoverOverlayPath.setAttribute("stroke-width", "3.2");
+  restoreGameoverOverlayPath.setAttribute("stroke-linecap", "round");
+  restoreGameoverOverlaySvg.append(restoreGameoverOverlayPath);
+  restoreGameoverOverlayButton.replaceChildren(restoreGameoverOverlaySvg);
+  restoreGameoverOverlayButton.title = "Show game over overlay";
+  restoreGameoverOverlayButton.setAttribute(
+    "aria-label",
+    "Show game over overlay",
+  );
   restoreGameoverOverlayButton.style.cssText = `
     position:absolute;
+    display:grid;
+    place-items:center;
+    width:48px;
+    height:48px;
+    padding:0;
     right:16px;
-    bottom:16px;
+    top:16px;
+    line-height:0;
+    background:#f7f7f0;
+    color:${colors.ui};
     opacity:0;
     pointer-events:none;
     transition:opacity .2s;
-    z-index:4;
+    z-index:12;
   `;
   restoreGameoverOverlayButton.addEventListener("click", toggleGameoverlay);
 
   mapScoreHud.style.cssText = `
     position:absolute;
     display:grid;
-    gap:2px;
-    padding:10px 14px;
-    border-radius:16px;
-    background:rgba(247,247,240,.88);
+    gap:4px;
+    row-gap:5px;
+    align-items:start;
+    min-width:0;
+    width:max-content;
+    max-width:176px;
+    padding:12px 14px;
+    border-radius:10px;
+    background:rgba(247,247,240,.82);
     color:${colors.ui};
-    box-shadow:0 8px 24px rgba(20,24,16,.18), inset 0 0 0 1px rgba(68,68,51,.12);
+    box-shadow:0 6px 18px rgba(20,24,16,.14), inset 0 0 0 1px rgba(68,68,51,.12);
     opacity:0;
     pointer-events:none;
     transition:opacity .2s;
-    z-index:5;
+    z-index:11;
   `;
-  mapScoreText.style.cssText = `font-size:18px;line-height:1;font-weight:900;`;
-  mapHighscoreText.style.cssText = `font-size:14px;line-height:1.15;font-weight:800;`;
-  mapScoreHud.append(mapScoreText, mapHighscoreText);
+  mapScoreText.style.cssText = `font-size:22px;line-height:1;font-weight:900;`;
+  mapHighscoreText.style.cssText = `font-size:15px;line-height:1.1;font-weight:800;opacity:.78;`;
+  mapRoadText.style.cssText = `font-size:14px;line-height:1.1;font-weight:800;opacity:.68;`;
+  mapMotorwayText.style.cssText = `font-size:14px;line-height:1.1;font-weight:800;opacity:.68;`;
+  mapScoreHud.append(
+    mapScoreText,
+    mapHighscoreText,
+    mapRoadText,
+    mapMotorwayText,
+  );
 
   gameoverWrapper.append(
     gameoverHeader,
@@ -163,33 +202,30 @@ export const initGameover = (
 };
 
 export const showGameoverMapControls = (): void => {
+  setHelpButtonVisible(false);
   const mapRect = svgElement.getBoundingClientRect();
-  const buttonWidth = restoreGameoverOverlayButton.offsetWidth || 130;
-  const gap = 14;
+  const buttonSize = restoreGameoverOverlayButton.offsetWidth || 48;
+  const gap = 16;
   const rightSpace = window.innerWidth - mapRect.right;
-  const leftSpace = mapRect.left;
-  restoreGameoverOverlayButton.style.bottom = "";
-  restoreGameoverOverlayButton.style.right = "";
-  restoreGameoverOverlayButton.style.left = "";
-  restoreGameoverOverlayButton.style.top = "";
-  if (rightSpace >= buttonWidth + gap) {
+
+  for (const el of [restoreGameoverOverlayButton, mapScoreHud]) {
+    el.style.bottom = "";
+    el.style.right = "";
+    el.style.left = "";
+    el.style.top = "";
+  }
+
+  const top = Math.max(gap, mapRect.top + gap);
+  mapScoreHud.style.left = `${gap}px`;
+  mapScoreHud.style.top = `${top}px`;
+
+  if (rightSpace >= buttonSize + gap * 2) {
     restoreGameoverOverlayButton.style.left = `${mapRect.right + gap}px`;
-    restoreGameoverOverlayButton.style.top = `${mapRect.top + gap}px`;
-    mapScoreHud.style.right = "";
-    mapScoreHud.style.left = `${mapRect.left + gap}px`;
-  } else if (leftSpace >= buttonWidth + gap) {
-    restoreGameoverOverlayButton.style.left = `${gap}px`;
-    restoreGameoverOverlayButton.style.top = `${mapRect.top + gap}px`;
-    mapScoreHud.style.left = "";
-    mapScoreHud.style.right = `${gap}px`;
   } else {
     restoreGameoverOverlayButton.style.right = "16px";
-    restoreGameoverOverlayButton.style.bottom = "16px";
-    mapScoreHud.style.left = "16px";
-    mapScoreHud.style.right = "";
   }
-  mapScoreHud.style.top = `${mapRect.top + gap}px`;
-  mapScoreHud.style.bottom = "";
+  restoreGameoverOverlayButton.style.top = `${top}px`;
+
   mapScoreHud.style.opacity = "1";
   restoreGameoverOverlayButton.style.opacity = "1";
   restoreGameoverOverlayButton.style.pointerEvents = "all";
@@ -204,6 +240,7 @@ export const hideGameoverMapControls = (): void => {
 export const showGameover = (): void => {
   const score = session.pickups;
   uiContainer.style.zIndex = "";
+  setHelpButtonVisible(false);
 
   if (score > Number(localStorage.getItem("Lando Curb"))) {
     localStorage.setItem("Lando Curb", String(score));
@@ -228,6 +265,10 @@ export const showGameover = (): void => {
   highscoreText.innerText = `Highscore: ${highscore}`;
   mapScoreText.innerText = `Score: ${score}`;
   mapHighscoreText.innerText = `Highscore: ${highscore}`;
+  mapRoadText.innerText = `Roads: ${streets.length}`;
+  mapMotorwayText.innerText = `Motorways: ${
+    streets.filter((street) => street.motorway).length
+  }`;
 
   const pickupCount = createElement("u");
   pickupCount.innerText = `${session.pickups} deliveries`;
@@ -335,6 +376,7 @@ export const hideGameover = (): void => {
   menuButtonWrapper.style.opacity = "0";
   toggleGameoverlayButton.style.pointerEvents = "none";
   toggleGameoverlayButton.style.opacity = "0";
+  hideGameoverMapControls();
 
   // Remove from DOM once invisible — backdrop-filter and opacity stacking contexts
   // on full-screen elements interfere with game element z-ordering while hidden.

@@ -25,52 +25,50 @@ const commuterIsOnStreet = (
   !!c.route[0] &&
   streetMatchesEdge(street, c.lastTraversed, c.route[0]);
 
-/**
- * Invariant: a street stays pending while any non-home commuter's home↔workplace round
- * trip would break without it. When every active commuter has an alternative, removal
- * is safe — `findRoute` cannot subsequently return `undefined` for them.
- */
+const routeIncludesStreet = (
+  street: Street,
+  c: (typeof commuters)[number],
+): boolean => {
+  if (c.state === "toWork" || c.state === "toHome") {
+    return routeUsesStreet(c.route, street);
+  }
+  if (c.state === "unparking") {
+    return !!c.pendingRoute && routeUsesStreet(c.pendingRoute, street);
+  }
+  return false;
+};
+
+const commuterAtWorkNeedsStreetHome = (
+  street: Street,
+  c: (typeof commuters)[number],
+): boolean => {
+  if ((c.state !== "atWork" && c.state !== "parking") || !c.destination)
+    return false;
+  const homeCell = c.parent! as unknown as Cell;
+  return !findRoute({ from: c.destination, to: [homeCell], exclude: street });
+};
+
+const hurryCommutersHomeFor = (street: Street): void => {
+  for (const c of commuters) {
+    if (c.state === "atWork" && commuterAtWorkNeedsStreetHome(street, c)) {
+      c.officeTimer = 121;
+    }
+  }
+};
+
 const commuterStillNeedsStreet = (
   street: Street,
   c: (typeof commuters)[number],
 ): boolean => {
   if (c.state === "home") return false;
 
-  const homeCell = c.parent! as unknown as Cell;
-  const workCells = c.workplace.points;
-
-  if (c.state === "toHome") {
-    if (commuterIsOnStreet(street, c)) return true;
-    if (!routeUsesStreet(c.route, street)) return false;
-    if (!c.route[0]) return true;
-    return !findRoute({ from: c.route[0], to: [homeCell], exclude: street });
+  if (commuterIsOnStreet(street, c)) return true;
+  if (routeIncludesStreet(street, c)) return true;
+  if (c.state === "toWork" && c.destination) {
+    const homeCell = c.parent! as unknown as Cell;
+    return !findRoute({ from: c.destination, to: [homeCell], exclude: street });
   }
-
-  if (c.state === "unparking") {
-    const route = c.pendingRoute;
-    if (!route?.[0] || !routeUsesStreet(route, street)) return false;
-    return !findRoute({ from: route[0], to: [homeCell], exclude: street });
-  }
-
-  if (c.state === "toWork") {
-    const destination = c.destination;
-    if (commuterIsOnStreet(street, c)) return true;
-    if (!destination) return routeUsesStreet(c.route, street);
-
-    const returnRoute = findRoute({
-      from: destination,
-      to: [homeCell],
-      exclude: street,
-    });
-    if (!returnRoute) return true;
-
-    if (!routeUsesStreet(c.route, street)) return false;
-    if (!c.route[0]) return true;
-    return !findRoute({ from: c.route[0], to: workCells, exclude: street });
-  }
-
-  if (!c.destination) return true;
-  return !findRoute({ from: c.destination, to: [homeCell], exclude: street });
+  return commuterAtWorkNeedsStreetHome(street, c);
 };
 
 const isStreetStillNeeded = (street: Street): boolean => {
@@ -109,6 +107,7 @@ export const removePath = (cell: Cell, prevCell?: Cell): void => {
   for (const streetToRemove of streetsToRemove) {
     if (streetToRemove.pendingRemoval) continue;
     streetToRemove.markPendingRemoval();
+    hurryCommutersHomeFor(streetToRemove);
   }
 
   // Streets only marked pending — don't flush atWork commuters yet.
@@ -119,6 +118,7 @@ export const cleanupPendingStreets = (): void => {
   const pending = streets.filter((s) => s.pendingRemoval);
   if (!pending.length) return;
 
+  pending.forEach(hurryCommutersHomeFor);
   const toRemove = pending.filter((s) => !isStreetStillNeeded(s));
   if (!toRemove.length) return;
 

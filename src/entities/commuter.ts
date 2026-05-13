@@ -243,36 +243,55 @@ export class Commuter extends GameObjectClass {
 
   rerouteIfBetter() {
     if (this.state === "unparking" && this.pendingRoute?.length) {
-      const newRoute = findRoute({
-        from: this.pendingRoute[0]!,
-        to: [this.parent! as unknown as Cell],
-      });
+      const homeCell = this.parent! as unknown as Cell;
+      const newRoute =
+        findRoute({
+          from: this.pendingRoute[0]!,
+          to: [homeCell],
+          avoidPending: true,
+        }) ?? findRoute({ from: this.pendingRoute[0]!, to: [homeCell] });
       if (newRoute) this.pendingRoute = newRoute;
       return;
     }
     if (this.state !== "toWork" && this.state !== "toHome") return;
     if (!this.route.length || !this.destination) return;
 
-    const to = (this.state === "toHome"
-      ? [this.parent!]
-      : [this.destination]) as unknown as Cell[];
+    const homeCell = this.parent! as unknown as Cell;
+    const currentRouteCrossesPending = routeCrossesPending(this.route);
+    if (currentRouteCrossesPending && this.state === "toWork") {
+      const workRoute = findRoute({
+        from: this.route[0]!,
+        to: [this.destination],
+        avoidPending: true,
+      });
+      if (workRoute) {
+        if (!sameRoute(workRoute, this.route)) this.smoothReroute(workRoute);
+        return;
+      }
 
-    const newRoute = findRoute({ from: this.route[0]!, to });
-    if (!newRoute) {
-      // Invariant: `isStreetStillNeeded` keeps pending any street whose removal would
-      // disconnect an active commuter. If we reach here for toHome, the invariant broke.
-      if (this.state === "toHome")
-        console.warn(
-          "rerouteIfBetter: invariant violated — toHome path disappeared",
-        );
-      if (this.state === "toWork") this.turnHome();
+      const homeRoute =
+        findRoute({
+          from: this.route[0]!,
+          to: [homeCell],
+          avoidPending: true,
+        }) ?? findRoute({ from: this.route[0]!, to: [homeCell] });
+      if (homeRoute) {
+        this.unassignFromWorkplace();
+        this.becomeToHome(homeRoute, { smooth: true });
+      }
       return;
     }
-    if (this.state === "toWork" && routeCrossesPending(newRoute)) {
-      // No penalty-free alternative exists — keep the current route.
-      // isStreetStillNeeded will hold the street pending until a clear path opens up.
-      return;
-    }
+
+    const to = (this.state === "toHome" ? [homeCell] : [this.destination]);
+
+    const newRoute = findRoute({
+      from: this.route[0]!,
+      to,
+      avoidPending: currentRouteCrossesPending,
+    }) ?? (currentRouteCrossesPending
+      ? findRoute({ from: this.route[0]!, to })
+      : undefined);
+    if (!newRoute) return;
     if (sameRoute(newRoute, this.route)) return;
     this.smoothReroute(newRoute);
   }
@@ -299,6 +318,10 @@ export class Commuter extends GameObjectClass {
     if (this.officeTimer <= 120) return;
 
     const route = findRoute({
+      from: this.destination!,
+      to: [this.parent! as unknown as Cell],
+      avoidPending: true,
+    }) ?? findRoute({
       from: this.destination!,
       to: [this.parent! as unknown as Cell],
     });
@@ -362,6 +385,10 @@ export class Commuter extends GameObjectClass {
     // Streets may have been removed during unparking — re-route from the rail's exit
     // before committing, falling back to the stale route only if no path exists.
     const fresh = findRoute({
+      from: this.pendingRoute![0]!,
+      to: [this.parent! as unknown as Cell],
+      avoidPending: true,
+    }) ?? findRoute({
       from: this.pendingRoute![0]!,
       to: [this.parent! as unknown as Cell],
     });

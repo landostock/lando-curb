@@ -236,6 +236,19 @@ export const setGameplayControlsVisible = (visible: boolean): void => {
   if (!visible) gridToggleTooltip.style.opacity = "0";
 };
 
+export const setHelpButtonVisible = (visible: boolean): void => {
+  helpButton.style.opacity = visible ? "1" : "0";
+  helpButton.style.pointerEvents = visible ? "all" : "none";
+};
+
+export const setResourceHudElevated = (elevated: boolean): void => {
+  const zIndex = elevated ? "5" : "";
+  pathTilesIndicator.style.zIndex = zIndex;
+  motorwayIndicator.style.zIndex = zIndex;
+  bridgeIndicator.style.zIndex = zIndex;
+  homeActionIndicator.style.zIndex = zIndex;
+};
+
 export const setDeveloperModeButtonSuppressed = (suppressed: boolean): void => {
   developerModeButtonSuppressed = suppressed;
   updateDeveloperModeButtonVisibility();
@@ -638,6 +651,7 @@ export const initUi = () => {
     background:#f7f7f0;
     font-size:28px;
     line-height:1;
+    z-index:30;
   `;
   helpButton.style.width = "48px";
   helpButton.style.height = "48px";
@@ -659,7 +673,7 @@ export const initUi = () => {
     backdrop-filter: blur(7px) saturate(1.05);
     transition: opacity .24s ease;
   `;
-  helpOverlay.style.zIndex = "4";
+  helpOverlay.style.zIndex = "40";
   helpOverlay.setAttribute("aria-hidden", "true");
 
   helpPanel.style.cssText = `
@@ -983,6 +997,7 @@ export const resetHudCounters = (): void => {
 };
 
 export const hideGameHud = (): void => {
+  scoreCounters.style.opacity = "0";
   clock.style.opacity = "0";
   clock.style.pointerEvents = "none";
   pathTilesIndicator.style.opacity = "0";

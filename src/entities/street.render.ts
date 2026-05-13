@@ -78,14 +78,14 @@ const isBridge = (street: { bridge?: boolean }): boolean =>
   street.bridge === true;
 
 const MOTORWAY_DASH_WIDTH = 0.6;
-const MOTORWAY_DASH_TARGET = 4.45;
-const MOTORWAY_DASH_MAX = 2.15;
-const MOTORWAY_DASH_MIN = 1.15;
-const MOTORWAY_DASH_MIN_GAP = 0.9;
+const MOTORWAY_DASH_TARGET = 3.35;
+const MOTORWAY_DASH_MAX = 2.05;
+const MOTORWAY_DASH_MIN = 0.95;
+const MOTORWAY_DASH_MIN_GAP = 0.45;
 const MOTORWAY_DASH_SAMPLE_STEP = 0.45;
 const MOTORWAY_DASH_END_TRIM = 0.35;
 const MOTORWAY_DASH_JUNCTION_TRIM = 1.15;
-const MOTORWAY_DASH_EDGE_PAD = 0.24;
+const MOTORWAY_DASH_EDGE_PAD = 0.18;
 
 const applyStreetStyle = (
   el: SVGElement,
@@ -372,34 +372,35 @@ const dashRangesForInterval = (
   if (length < MOTORWAY_DASH_MIN * 1.25) return [];
 
   let count = Math.max(1, Math.round(length / MOTORWAY_DASH_TARGET));
-  let dashLength = MOTORWAY_DASH_MIN;
   while (
     count > 1 &&
-    length - count * dashLength - MOTORWAY_DASH_EDGE_PAD * 2 <
+    length - count * MOTORWAY_DASH_MIN - MOTORWAY_DASH_EDGE_PAD * 2 <
       MOTORWAY_DASH_MIN_GAP * (count - 1)
   ) {
     count--;
   }
 
-  dashLength = Math.max(
-    MOTORWAY_DASH_MIN,
-    Math.min(MOTORWAY_DASH_MAX, length / (count * 1.85)),
-  );
-
   if (count === 1) {
-    dashLength = Math.min(MOTORWAY_DASH_MAX, length * 0.58);
+    const dashLength = Math.min(MOTORWAY_DASH_MAX, length * 0.62);
     const center = from + length / 2;
     return [[center - dashLength / 2, center + dashLength / 2]];
   }
 
   const edgePad = Math.min(
     MOTORWAY_DASH_EDGE_PAD,
-    Math.max(0, (length - count * dashLength) / 2),
+    Math.max(0, (length - count * MOTORWAY_DASH_MIN) / 2),
   );
-  const gap = Math.max(
-    MOTORWAY_DASH_MIN_GAP,
-    (length - count * dashLength - edgePad * 2) / (count - 1),
+  const available = Math.max(0, length - edgePad * 2);
+  const slot = available / count;
+  const maxDashForGap = Math.max(
+    MOTORWAY_DASH_MIN,
+    (available - MOTORWAY_DASH_MIN_GAP * (count - 1)) / count,
   );
+  const dashLength = Math.max(
+    MOTORWAY_DASH_MIN,
+    Math.min(MOTORWAY_DASH_MAX, maxDashForGap, slot * 0.66),
+  );
+  const gap = (available - count * dashLength) / (count - 1);
   const ranges: Array<[number, number]> = [];
   for (let i = 0; i < count; i++) {
     const start = from + edgePad + i * (dashLength + gap);

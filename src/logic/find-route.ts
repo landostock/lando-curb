@@ -75,6 +75,7 @@ const dijkstra = (
   to: Set<number>,
   excludeFrom?: number,
   excludeTo?: number,
+  avoidPending = false,
 ): RouteStep[] | undefined => {
   if (!from || !to.size) return undefined;
 
@@ -132,6 +133,7 @@ const dijkstra = (
         (curKey === excludeTo && nk === excludeFrom)
       )
         continue;
+      if (avoidPending && penalty > 0) continue;
       const neighbor = grid.get(nk);
       if (!neighbor) continue;
 
@@ -153,11 +155,14 @@ export const findRoute = ({
   from,
   to,
   exclude,
+  avoidPending,
 }: {
   from: Cell;
   to: Cell[];
   /** Hard-skip this street's edge while routing — used to ask "does an alternative exist?". */
   exclude?: Street;
+  /** Treat pending-removal streets as unavailable instead of just expensive. */
+  avoidPending?: boolean;
 }): RouteStep[] | undefined => {
   const excludeFrom = exclude ? nodeKey(exclude.points[0]) : undefined;
   const excludeTo = exclude ? nodeKey(exclude.points[1]) : undefined;
@@ -167,6 +172,7 @@ export const findRoute = ({
     new Set(to.map(nodeKey)),
     excludeFrom,
     excludeTo,
+    avoidPending,
   );
 };
 

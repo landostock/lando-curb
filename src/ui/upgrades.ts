@@ -8,6 +8,8 @@ import {
   homeActionIndicator,
   motorwayIndicator,
   setDeveloperModeButtonSuppressed,
+  setHelpButtonVisible,
+  setResourceHudElevated,
   updateInventoryCounters,
 } from "./ui";
 
@@ -280,6 +282,8 @@ export const showUpgradePicker = (onPick: () => void): boolean => {
   overlay.style.pointerEvents = "all";
   pickerPanel.style.transform = "translateY(0) scale(1)";
   setDeveloperModeButtonSuppressed(true);
+  setHelpButtonVisible(false);
+  setResourceHudElevated(true);
 
   // Trigger scale animation
   requestAnimationFrame(() => {
@@ -307,6 +311,8 @@ const hideUpgradePicker = (): void => {
     card.style.pointerEvents = "none";
   });
   setDeveloperModeButtonSuppressed(false);
+  setHelpButtonVisible(true);
+  setResourceHudElevated(false);
 
   // Clean up cards after transition
   cleanupTimer = setTimeout(() => {

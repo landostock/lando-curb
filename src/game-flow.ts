@@ -27,6 +27,7 @@ import {
   hideGameHud,
   resetDeveloperMode,
   resetHudCounters,
+  setHelpButtonVisible,
   setMotorwayMode,
 } from "./ui/ui";
 import { resetUpgrades } from "./ui/upgrades";
@@ -100,6 +101,7 @@ const startNewGame = (): void => {
       resetViewBox();
       clearLayers();
       hideGameover();
+      setHelpButtonVisible(true);
       clearLostFocus();
 
       setTimeout(() => {
@@ -138,6 +140,7 @@ export const returnToMenu = (): void => {
   loop.stop();
   fadeOutGameMusic();
   hideGameHud();
+  setHelpButtonVisible(true);
   gridHide();
   gridRedState.locked = false;
   gridRedState.on = false;
