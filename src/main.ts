@@ -18,6 +18,7 @@ import { initHomeActions } from "./ui/home-actions";
 import {
   audioModeButton,
   clock,
+  developerMode,
   gridToggleButton,
   gridToggleTooltip,
   helpButton,
@@ -30,6 +31,7 @@ import {
   pauseSvgPath,
   requestDeveloperModeAccess,
   setAudioModeButton,
+  timeLapseMode,
 } from "./ui/ui";
 
 interface HmrData {
@@ -64,7 +66,12 @@ const loop = GameLoop({
   blur: true,
   clearCanvas: false,
   update: () => {
-    if (window.__landoLoopToken === loopToken) tickWorld(loop);
+    if (window.__landoLoopToken !== loopToken) return;
+    const steps = developerMode && timeLapseMode ? 3 : 1;
+    for (let i = 0; i < steps; i++) {
+      tickWorld(loop);
+      if (loop.isStopped) break;
+    }
   },
   render: () => {
     if (window.__landoLoopToken === loopToken) renderWorld();
@@ -117,7 +124,8 @@ const { signal } = ac;
 const isAudioMode = (mode: unknown): mode is AudioMode =>
   mode === "all" || mode === "muted" || mode === "music" || mode === "sfx";
 
-const handleDeveloperAccessKey = (event: KeyboardEvent): void => {
+const handleDeveloperAccessKey = (event: Event): void => {
+  if (!(event instanceof KeyboardEvent)) return;
   const key = event.key.toLowerCase();
   const isDeveloperKey =
     event.code === "KeyD" ||
@@ -188,7 +196,8 @@ gridToggleTooltip.addEventListener("click", () => gridToggleButton.click(), {
   signal,
 });
 
-const handleDeveloperClockClick = (event: MouseEvent): void => {
+const handleDeveloperClockClick = (event: Event): void => {
+  if (!(event instanceof MouseEvent)) return;
   event.preventDefault();
   event.stopPropagation();
   const now = performance.now();

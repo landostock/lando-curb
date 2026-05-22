@@ -45,6 +45,13 @@ export interface BayGeometry {
   bayLanePoints: Pixel[];
 }
 
+const requireRenderState = (bp: BusinessPark): BusinessParkRenderState => {
+  if (!bp.rs) {
+    throw new Error("Business park render state is not initialized");
+  }
+  return bp.rs;
+};
+
 const roundness = 2;
 const borderLineThickness = 1;
 
@@ -396,7 +403,7 @@ function addStatusPins(rs: BusinessParkRenderState, l: ParkLayout): void {
 }
 
 export function drawParkingLot(bp: BusinessPark): BayGeometry {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   const inset = 0.8;
   const lotW = rs.parkLotW - inset * 2;
   const lotH = rs.parkLotH - inset * 2;
@@ -482,7 +489,7 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
 }
 
 export function updateDemandDisplay(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
 
   const count = bp.demand;
 
@@ -526,7 +533,7 @@ export function updateDemandDisplay(bp: BusinessPark): void {
 }
 
 export function showWarn(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   rs.pinSvg.style.opacity = String(1);
   rs.warnCircle.style.transition = "stroke-dashoffset .4s .8s";
   rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1)`;
@@ -537,7 +544,7 @@ export function showWarn(bp: BusinessPark): void {
 }
 
 export function hideWarn(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   rs.pinSvg.style.opacity = String(0);
   rs.warnCircle.style.transition = `stroke-dashoffset .3s`;
   rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(0)`;
@@ -545,13 +552,16 @@ export function hideWarn(bp: BusinessPark): void {
 }
 
 export function updateWarn(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   const fullCircle = 12.56; // Math.PI * 4
-  const { demandTimerMax } = getSpawningConfig();
+  const { demandPinCap, demandTimerMax } = getSpawningConfig();
   // Circle fills as timer depletes: full circle = timer at 0
   const timerFraction = bp.demandTimer / demandTimerMax;
   const warnFraction = 0.6; // warning shows at 60% timer
-  const progress = (warnFraction - timerFraction) / warnFraction;
+  const progress =
+    bp.demand > demandPinCap
+      ? 1 - timerFraction
+      : (warnFraction - timerFraction) / warnFraction;
   const dashoffset =
     fullCircle - fullCircle * Math.min(1, Math.max(0, progress));
 
@@ -572,7 +582,7 @@ export function updateWarn(bp: BusinessPark): void {
 // ─── Trending / Popular ──────────────────────────────────────────────────────
 
 function showTrending(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   rs.trendingCircleBg.setAttribute("opacity", "0.2");
   rs.trendingCircle.setAttribute("opacity", "1");
   rs.trendingCircle.setAttribute("stroke-dashoffset", "0");
@@ -583,7 +593,7 @@ function showTrending(bp: BusinessPark): void {
 }
 
 function hideTrending(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   rs.trendingCircleBg.setAttribute("opacity", "0");
   rs.trendingCircle.setAttribute("opacity", "0");
   rs.trendingCircle.setAttribute("stroke-dashoffset", String(12.56));
@@ -591,7 +601,7 @@ function hideTrending(bp: BusinessPark): void {
 }
 
 function updateTrending(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   const fullCircle = 12.56;
   const cfg = getSpawningConfig();
   // Circle drains as timer runs out: full = just started, empty = expired
@@ -601,7 +611,7 @@ function updateTrending(bp: BusinessPark): void {
 }
 
 function showPopular(bp: BusinessPark): void {
-  const { rs } = bp;
+  const rs = requireRenderState(bp);
   rs.pinBubble.setAttribute("fill", "#fff");
   // Star scales in
   rs.starSvg.setAttribute("transform", "translate(0 -6) scale(1)");

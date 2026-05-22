@@ -30,6 +30,8 @@ export const homeActionIndicatorCount = createElement();
 
 export const developerModeButton = createElement("button");
 export let developerMode = false;
+export const timeLapseButton = createElement("button");
+export let timeLapseMode = false;
 let gameplayControlsVisible = false;
 let developerModeButtonSuppressed = false;
 let developerModeAccessGranted = false;
@@ -68,6 +70,27 @@ const setDeveloperModeButtonState = (): void => {
     : `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
 };
 
+const setTimeLapseButtonState = (): void => {
+  timeLapseButton.innerText = "x3";
+  timeLapseButton.title = timeLapseMode ? "Time Lapse: x3" : "Time Lapse: Off";
+  timeLapseButton.setAttribute("aria-label", timeLapseButton.title);
+  timeLapseButton.style.background = timeLapseMode ? colors.car3 : "#f7f7f0";
+  timeLapseButton.style.color = timeLapseMode ? "#fff" : colors.ui;
+  timeLapseButton.style.boxShadow = timeLapseMode
+    ? `0 0 0 2px #fff, 0 8px 24px ${colors.shade}`
+    : `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
+};
+
+export const setTimeLapseMode = (on: boolean): void => {
+  timeLapseMode = on && developerMode;
+  setTimeLapseButtonState();
+  updateDeveloperModeButtonVisibility();
+};
+
+export const toggleTimeLapseMode = (): void => {
+  setTimeLapseMode(!timeLapseMode);
+};
+
 export const enableDeveloperMode = ({
   skipConfirm = false,
 }: { skipConfirm?: boolean } = {}): void => {
@@ -97,8 +120,10 @@ export const requestDeveloperModeAccess = (): void => {
 
 export const resetDeveloperMode = (): void => {
   developerMode = false;
+  timeLapseMode = false;
   developerModeAccessGranted = false;
   setDeveloperModeButtonState();
+  setTimeLapseButtonState();
   updateInventoryCounters();
   updateDeveloperModeButtonVisibility();
 };
@@ -111,6 +136,10 @@ const updateDeveloperModeButtonVisibility = (): void => {
   developerModeButton.style.opacity = visible ? "1" : "0";
   developerModeButton.style.visibility = visible ? "visible" : "hidden";
   developerModeButton.style.pointerEvents = visible ? "all" : "none";
+  const timeLapseVisible = visible && developerMode;
+  timeLapseButton.style.opacity = timeLapseVisible ? "1" : "0";
+  timeLapseButton.style.visibility = timeLapseVisible ? "visible" : "hidden";
+  timeLapseButton.style.pointerEvents = timeLapseVisible ? "all" : "none";
 };
 
 export const pauseButton = createElement("button");
@@ -640,6 +669,29 @@ export const initUi = () => {
   });
   setDeveloperModeButtonState();
 
+  timeLapseButton.style.cssText = `
+    position:absolute;
+    bottom:240px;
+    right:16px;
+    padding:0;
+    pointer-events:all;
+    display:grid;
+    place-items:center;
+    font-size:14px;
+    line-height:1;
+    letter-spacing:0;
+    z-index:5;
+  `;
+  timeLapseButton.style.width = "48px";
+  timeLapseButton.style.height = "48px";
+  timeLapseButton.style.opacity = "0";
+  timeLapseButton.style.visibility = "hidden";
+  timeLapseButton.style.pointerEvents = "none";
+  timeLapseButton.addEventListener("click", () => {
+    toggleTimeLapseMode();
+  });
+  setTimeLapseButtonState();
+
   helpButton.style.cssText = `
     position:absolute;
     bottom:16px;
@@ -987,7 +1039,7 @@ export const initUi = () => {
     gridToggleTooltip,
     gridToggleButton,
   );
-  document.body.append(developerModeButton);
+  document.body.append(developerModeButton, timeLapseButton);
 };
 
 export const resetHudCounters = (): void => {

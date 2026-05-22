@@ -9,7 +9,7 @@ import { updateGridData } from "../logic/find-route";
 import { getSpawningConfig } from "../logic/spawning";
 import { addStreet, businessParks, session } from "../state";
 import type { Cell, Direction, Pixel, Point } from "../types";
-import { developerMode, pickupCount } from "../ui/ui";
+import { pickupCount } from "../ui/ui";
 import {
   type BusinessParkRenderState,
   renderBusinessPark,
@@ -206,29 +206,13 @@ export class BusinessPark extends GameObjectClass {
     if (gameStarted) {
       this.age++;
       const cfg = getSpawningConfig();
-      const unservedDemand = Math.max(
-        0,
-        this.demand - this.activeFulfillmentCount,
-      );
-      if (unservedDemand > 0) {
+      const pendingDemand = Math.max(0, this.demand);
+      if (pendingDemand > 0) {
         const noRouteAvailable = !hasDispatchableCommuter(this);
-        const outOfBuildOptions =
-          !developerMode &&
-          session.paths <= 0 &&
-          session.motorways <= 0 &&
-          session.bridges <= 0;
         this.hurryParkedCommuters();
-
-        if (noRouteAvailable && outOfBuildOptions) {
-          this.demandTimer = Math.min(
-            this.demandTimer + cfg.demandTimerRecovery,
-            cfg.demandTimerMax,
-          );
-        } else {
-          this.demandTimer -= noRouteAvailable
-            ? Math.min(2, unservedDemand)
-            : Math.min(4, unservedDemand);
-        }
+        this.demandTimer -= noRouteAvailable
+          ? Math.min(2, pendingDemand)
+          : Math.min(4, pendingDemand);
       } else {
         this.demandTimer = Math.min(
           this.demandTimer + cfg.demandTimerRecovery,
