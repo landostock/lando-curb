@@ -1,3 +1,5 @@
+Always ask for a permission when trying to playtest the game yourself.
+
 ## Source layout
 
 - `src/entities/` — Game objects: business-park, commuter, street, house, lake, tree, landmark, boulevard

@@ -7,9 +7,9 @@ import {
   developerMode,
   updateInventoryCounters,
 } from "../ui/ui";
-import { isAdjacent } from "../util/geometry";
 import { findRoute, routeUsesStreet, streetMatchesEdge } from "./find-route";
 import { commitStreetChanges } from "./orchestrator";
+import { isStreetEdge } from "./street-edge";
 
 const streetTouchesCell = (street: Street, { x, y }: Cell): boolean => {
   const [p0, p1] = street.points;
@@ -81,7 +81,7 @@ const isStreetStillNeeded = (street: Street): boolean => {
 export const removePath = (cell: Cell, prevCell?: Cell): void => {
   // Edge mode: dragging from an adjacent cell — remove only the street between them.
   // Otherwise (single click, same cell, or non-adjacent jump): remove every street at `cell`.
-  const useEdgeMode = !!prevCell && isAdjacent(prevCell, cell);
+  const useEdgeMode = !!prevCell && isStreetEdge(prevCell, cell);
 
   const streetsToRemove = streets.filter((path) => {
     if (path.points[0].locked || path.points[1].locked) return false;

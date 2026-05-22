@@ -14,6 +14,7 @@ import {
   samePathInBothCells,
   streetWouldClipBuilding,
 } from "../logic/placement-obstacles";
+import { isStreetEdge } from "../logic/street-edge";
 import { addStreet, session, streets } from "../state";
 import type { Cell, Pixel } from "../types";
 import {
@@ -144,10 +145,7 @@ export function onMove(
   cell: Cell,
   pointerInRect: Pixel,
 ): MoveResult {
-  const xDiff = cell.x - startCell.x;
-  const yDiff = cell.y - startCell.y;
-  const sameCellOrTooFar =
-    (xDiff === 0 && yDiff === 0) || Math.abs(xDiff) > 1 || Math.abs(yDiff) > 1;
+  const sameCellOrTooFar = !isStreetEdge(startCell, cell);
 
   const start = toSvgPoint(startCell);
   indicatorWrapper.setAttribute(
@@ -162,6 +160,8 @@ export function onMove(
     return "pending";
   }
 
+  const xDiff = cell.x - startCell.x;
+  const yDiff = cell.y - startCell.y;
   const end = halfCellDelta(xDiff, yDiff);
   indicator.setAttribute("d", `M0 0L${end.x} ${end.y}`);
   indicator.style.transition = transition;
