@@ -123,16 +123,19 @@ export const cleanupPendingStreets = (): void => {
   if (!toRemove.length) return;
 
   toRemove.forEach((s) => {
-    if (s.bridge) {
-      if (!developerMode) session.bridges++;
-      updateInventoryCounters();
-      bridgeIndicator.style.opacity = "1";
-    } else if (s.motorway) {
-      if (!developerMode) session.motorways++;
-      updateInventoryCounters();
-    } else {
-      if (!developerMode) session.paths++;
-      updateInventoryCounters();
+    const refundResource = !s.points.some((p) => p.locked);
+    if (refundResource) {
+      if (s.bridge) {
+        if (!developerMode) session.bridges++;
+        updateInventoryCounters();
+        bridgeIndicator.style.opacity = "1";
+      } else if (s.motorway) {
+        if (!developerMode) session.motorways++;
+        updateInventoryCounters();
+      } else {
+        if (!developerMode) session.paths++;
+        updateInventoryCounters();
+      }
     }
     s.remove();
     playRemoveThup();

@@ -4,9 +4,14 @@ import { playAppearChime } from "../audio";
 import { colors } from "../gfx/colors";
 import { baseLayer, houseLayer, houseShadowLayer } from "../gfx/layers";
 import { createSvgElement, toSvgPoint } from "../gfx/svg-utils";
-import { findRoute, updateGridData } from "../logic/find-route";
+import {
+  findRoute,
+  streetMatchesEdge,
+  updateGridData,
+} from "../logic/find-route";
 import { commitStreetChanges } from "../logic/orchestrator";
 import { cellInLake, cellIsBlocked } from "../logic/placement-obstacles";
+import { isStreetEdge } from "../logic/street-edge";
 import {
   addCommuter,
   addStreet,
@@ -14,6 +19,7 @@ import {
   removeCommuter,
   removeHouse,
   removeStreet,
+  streets,
 } from "../state";
 import type { Cell, Direction } from "../types";
 import { Commuter } from "./commuter";
@@ -78,38 +84,75 @@ export class House extends GameObjectClass {
     this.addToSvg();
   }
 
-  rotateTo(x: number, y: number) {
+  private retireStartPath(street: Street): void {
+    street.pendingRemoval = true;
+  }
+
+  private findRetiredStartPath(houseCell: Cell, targetCell: Cell): Street | undefined {
+    return streets.find(
+      (street) =>
+        street.pendingRemoval && streetMatchesEdge(street, houseCell, targetCell),
+    );
+  }
+
+  rotateTo(x: number, y: number): boolean {
     const oldStartPath = this.startPath;
-    if (!oldStartPath) return;
+    if (!oldStartPath) return false;
 
     // No-op guard.
-    if (x === this.x + this.facing.x && y === this.y + this.facing.y) return;
+    if (x === this.x + this.facing.x && y === this.y + this.facing.y)
+      return false;
+
+    const houseCell = { x: this.x, y: this.y } as Cell;
+    const targetCell = { x, y } as Cell;
+    if (!isStreetEdge(houseCell, targetCell)) return false;
 
     // Target-cell validation — rotation must point to a placeable cell.
-    if (cellIsBlocked({ x, y } as Cell)) return;
-    if (cellInLake({ x, y } as Cell)) return;
-    if (houses.some((h) => h !== this && h.x === x && h.y === y)) return;
+    if (cellIsBlocked(targetCell)) return false;
+    if (cellInLake(targetCell)) return false;
+    if (houses.some((h) => h !== this && h.x === x && h.y === y))
+      return false;
 
-    // If any commuter is currently outside home, we need to verify the rotation doesn't
-    // strand them. Otherwise rotation is always safe — anyone at home will reroute on
-    // next dispatch, so a freshly-placed (still-disconnected) house rotates freely.
-    const activeCommuters = this.children.filter(
-      (c): c is Commuter => c instanceof Commuter && c.state !== "home",
-    );
-
-    if (activeCommuters.length) {
-      // Stage the new startPath alongside the old so findRoute considers the post-rotation
-      // graph, then revert if any active commuter's route would break.
-      const stagedNew = new Street({
+    const retiredStartPath = this.findRetiredStartPath(houseCell, targetCell);
+    const stagedNew =
+      retiredStartPath ??
+      new Street({
         points: [
           { x: this.x, y: this.y, locked: true },
           { x, y, locked: true },
         ],
       });
-      addStreet(stagedNew);
+    if (retiredStartPath) retiredStartPath.pendingRemoval = false;
+    else addStreet(stagedNew);
+
+    // If any commuter is currently outside home, first verify that rotation is viable
+    // with both driveways in the graph, then keep the old driveway only when it is the
+    // only remaining way home.
+    const activeCommuters = this.children.filter(
+      (c): c is Commuter => c instanceof Commuter && c.state !== "home",
+    );
+
+    let oldStartPathStillNeeded = false;
+    if (activeCommuters.length) {
       updateGridData();
 
-      const houseCell: Cell = { x: this.x, y: this.y } as Cell;
+      const canReachHome = (child: Commuter, exclude?: Street): boolean => {
+        if (child.state === "toHome" && child.route[0]) {
+          return !!findRoute({ from: child.route[0], to: [houseCell], exclude });
+        }
+        if (child.state === "unparking" && child.pendingRoute?.[0]) {
+          return !!findRoute({
+            from: child.pendingRoute[0],
+            to: [houseCell],
+            exclude,
+          });
+        }
+        if (child.destination) {
+          return !!findRoute({ from: child.destination, to: [houseCell], exclude });
+        }
+        return true;
+      };
+
       const viable = activeCommuters.every((child) => {
         const workCells = child.workplace.points;
 
@@ -119,51 +162,32 @@ export class House extends GameObjectClass {
         if (child.state === "toWork") {
           if (!child.route[0] || !child.destination) return true;
           return (
-            !!findRoute({ from: child.route[0], to: workCells, exclude: oldStartPath }) &&
-            !!findRoute({ from: child.destination, to: [houseCell], exclude: oldStartPath })
+            !!findRoute({ from: child.route[0], to: workCells }) &&
+            canReachHome(child)
           );
         }
 
-        // toHome / unparking: already on the way back — just verify the home leg.
-        if (child.state === "toHome" && child.route[0]) {
-          return !!findRoute({ from: child.route[0], to: [houseCell], exclude: oldStartPath });
-        }
-        if (child.state === "unparking" && child.pendingRoute?.[0]) {
-          return !!findRoute({ from: child.pendingRoute[0], to: [houseCell], exclude: oldStartPath });
-        }
-
-        // atWork / parking: parked at destination — check the return trip home.
-        if (child.destination) {
-          return !!findRoute({ from: child.destination, to: [houseCell], exclude: oldStartPath });
-        }
-        return true;
+        return canReachHome(child);
       });
 
       if (!viable) {
-        removeStreet(stagedNew);
+        if (retiredStartPath) retiredStartPath.pendingRemoval = true;
+        else removeStreet(stagedNew);
         updateGridData();
-        return;
+        return false;
       }
 
-      // Commit: replace old with already-staged new.
-      this.facing = { x: x - this.x, y: y - this.y } as Direction;
-      oldStartPath.remove();
-      this.startPath = stagedNew;
-      commitStreetChanges();
-      return;
+      oldStartPathStillNeeded = activeCommuters.some(
+        (child) => !canReachHome(child, oldStartPath),
+      );
     }
 
-    // Simple path: no active commuters — just swap the startPath.
     this.facing = { x: x - this.x, y: y - this.y } as Direction;
-    oldStartPath.remove();
-    this.startPath = new Street({
-      points: [
-        { x: this.x, y: this.y, locked: true },
-        { x, y, locked: true },
-      ],
-    });
-    addStreet(this.startPath);
-    commitStreetChanges();
+    this.startPath = stagedNew;
+    if (oldStartPathStillNeeded) this.retireStartPath(oldStartPath);
+    else oldStartPath.remove();
+    commitStreetChanges(false, { noShadow: true });
+    return true;
   }
 
   addToSvg() {

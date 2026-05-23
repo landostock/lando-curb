@@ -76,7 +76,12 @@ export function onDown(startCell: Cell): void {
   indicator.style.transition = transition;
 }
 
-export type MoveResult = "pending" | "placed" | "blocked" | "exhausted";
+export type MoveResult =
+  | "pending"
+  | "placed"
+  | "placed-end"
+  | "blocked"
+  | "exhausted";
 
 const upgradeExistingStreet = (startCell: Cell, cell: Cell): MoveResult => {
   const result = upgradeStreetToMotorway(startCell, cell);
@@ -173,6 +178,7 @@ export function onMove(
   const existingStreet = samePathInBothCells(startCell, cell);
   const canUpgradeMotorway =
     !needsBridge && existingStreet && (developerMode || session.motorways > 0);
+  const targetHouse = houseInCell(cell);
 
   // Validate placement BEFORE deducting or flashing "!" — a player dragging over a BP or
   // lake shouldn't see an "out of paths" exhaustion flash.
@@ -181,6 +187,14 @@ export function onMove(
     "stroke",
     needsBridge ? colors.bridge : canUpgradeMotorway ? colors.motorway : colors.base,
   );
+  if (targetHouse) {
+    if (needsBridge || dragBuildMode === "motorway") return "blocked";
+    if (!targetHouse.rotateTo(startCell.x, startCell.y)) return "blocked";
+    playRoadPop({});
+    dragBuildMode = "street";
+    indicator.style.transition = "";
+    return "placed-end";
+  }
   if (existingStreet) {
     if (restorePendingStreet(startCell, cell)) return "placed";
     if (dragBuildMode === "street") return "blocked";
@@ -190,7 +204,6 @@ export function onMove(
   }
   if (dragBuildMode === "motorway") return "blocked";
   if (streetWouldClipBuilding(startCell, cell)) return "blocked";
-  if (houseInCell(cell)) return "blocked";
 
   if (!reserveBuildResource(needsBridge)) return "exhausted";
 

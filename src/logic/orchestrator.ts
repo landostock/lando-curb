@@ -47,8 +47,11 @@ let lastGameplayTick = -1;
  * improved. Pass `forceAtWork = true` only when you also want to eject parked commuters
  * (e.g. admin / reset flows). Player-initiated changes use the default `false`.
  */
-export const commitStreetChanges = (forceAtWork = false): void => {
-  drawStreets();
+export const commitStreetChanges = (
+  forceAtWork = false,
+  { noShadow = false }: { noShadow?: boolean } = {},
+): void => {
+  drawStreets({ noShadow });
   updateGridData();
   rerouteAllCommuters(forceAtWork);
 };

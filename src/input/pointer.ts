@@ -220,6 +220,24 @@ const handlePointerup = (event: PointerEvent): void => {
   removeDragPrev = null;
 };
 
+const applyPathDrawResult = (
+  result: pathDraw.MoveResult,
+  snappedCell: Cell,
+): void => {
+  if (result === "placed") {
+    startCell = snappedCell;
+  } else if (result === "placed-end") {
+    pathDraw.onUp();
+    startCell = null;
+    isDragging = false;
+  } else if (result === "exhausted") {
+    startCell = null;
+    isDragging = false;
+  } else if (result === "blocked") {
+    svgElement.style.cursor = "not-allowed";
+  }
+};
+
 const handlePointermove = (event: PointerEvent): void => {
   event.stopPropagation();
   if (!gameInputEnabled()) {
@@ -267,11 +285,11 @@ const handlePointermove = (event: PointerEvent): void => {
 
     if (startHouse && !endHouse) {
       if (!isAdjacent(startHouse, cell)) return;
-      startHouse.rotateTo(cell.x, cell.y);
+      if (!startHouse.rotateTo(cell.x, cell.y)) return;
       startCell = cell;
       startHouse.place();
     } else if (endHouse && !startHouse) {
-      endHouse.rotateTo(startCell!.x, startCell!.y);
+      if (!endHouse.rotateTo(startCell!.x, startCell!.y)) return;
       startCell = null;
       isDragging = false;
       endHouse.place();
@@ -282,14 +300,7 @@ const handlePointermove = (event: PointerEvent): void => {
   // Path draw – snap target cell to nearest 45° direction
   const snappedCell = snapCellTo45(startCell!, pointerInRect);
   const result = pathDraw.onMove(startCell!, snappedCell, pointerInRect);
-  if (result === "placed") {
-    startCell = snappedCell;
-  } else if (result === "exhausted") {
-    startCell = null;
-    isDragging = false;
-  } else if (result === "blocked") {
-    svgElement.style.cursor = "not-allowed";
-  }
+  applyPathDrawResult(result, snappedCell);
 };
 
 export const initPointer = (): void => {
