@@ -174,8 +174,11 @@ const openHelp = (): void => {
   resumeAfterHelp = gameState.gameStarted && !loop.isStopped;
   if (resumeAfterHelp) loop.stop();
   helpOverlay.setAttribute("aria-hidden", "false");
+  helpOverlay.style.visibility = "visible";
+  helpOverlay.style.transition = "opacity .24s ease";
   helpOverlay.style.pointerEvents = "all";
   helpOverlay.style.opacity = "1";
+  helpPanel.style.pointerEvents = "all";
   helpPanel.style.transform = "translateY(0) scale(1)";
 };
 
@@ -185,6 +188,9 @@ const closeHelp = (): void => {
   helpOverlay.setAttribute("aria-hidden", "true");
   helpOverlay.style.pointerEvents = "none";
   helpOverlay.style.opacity = "0";
+  helpOverlay.style.transition = "opacity .24s ease, visibility 0s linear .24s";
+  helpOverlay.style.visibility = "hidden";
+  helpPanel.style.pointerEvents = "none";
   helpPanel.style.transform = "translateY(10px) scale(.98)";
   if (resumeAfterHelp && gameState.gameStarted) loop.start();
   resumeAfterHelp = false;

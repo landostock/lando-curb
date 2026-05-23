@@ -721,9 +721,10 @@ export const initUi = () => {
     padding:24px;
     pointer-events:none;
     opacity:0;
+    visibility:hidden;
     background:rgba(31, 38, 24, .28);
     backdrop-filter: blur(7px) saturate(1.05);
-    transition: opacity .24s ease;
+    transition: opacity .24s ease, visibility 0s linear .24s;
   `;
   helpOverlay.style.zIndex = "40";
   helpOverlay.setAttribute("aria-hidden", "true");
@@ -740,6 +741,7 @@ export const initUi = () => {
       0 22px 70px rgba(20, 24, 16, .24),
       inset 0 0 0 1px rgba(68, 68, 51, .09);
     color:${colors.ui};
+    pointer-events:none;
     transform:translateY(10px) scale(.98);
     transition: transform .24s ease;
   `;

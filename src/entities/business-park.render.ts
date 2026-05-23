@@ -6,6 +6,7 @@ import {
   gridBlockLayer,
   houseLayer,
   houseShadowLayer,
+  parkingMarkingLayer,
   pinLayer,
 } from "../gfx/layers";
 import { createSvgElement, toSvgEdge } from "../gfx/svg-utils";
@@ -22,6 +23,7 @@ export interface BusinessParkRenderState {
   demandSvg: SVGGElement;
   buildingSvg: SVGGElement;
   parkingLotSvg?: SVGGElement;
+  parkingMarkingSvg?: SVGGElement;
   parkOriginX: number;
   parkOriginY: number;
   parkLotW: number;
@@ -410,10 +412,15 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
 
   // Remove old lot if rebuilding
   if (rs.parkingLotSvg) rs.parkingLotSvg.remove();
+  if (rs.parkingMarkingSvg) rs.parkingMarkingSvg.remove();
 
   rs.parkingLotSvg = createSvgElement("g");
   rs.parkingLotSvg.style.transform = `translate(${rs.parkOriginX + inset}px, ${rs.parkOriginY + inset}px)`;
   gridBlockLayer.append(rs.parkingLotSvg);
+
+  rs.parkingMarkingSvg = createSvgElement("g");
+  rs.parkingMarkingSvg.style.transform = rs.parkingLotSvg.style.transform;
+  parkingMarkingLayer.append(rs.parkingMarkingSvg);
 
   // Asphalt pad
   const asphalt = createSvgElement("rect");
@@ -452,7 +459,7 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
   wall.setAttribute("y2", String(wy2));
   wall.setAttribute("stroke", lc);
   wall.setAttribute("stroke-width", String(lw));
-  rs.parkingLotSvg.append(wall);
+  rs.parkingMarkingSvg.append(wall);
 
   // Divider lines from back wall into driving lane
   for (let i = 0; i <= bayCount; i++) {
@@ -466,7 +473,7 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
     line.setAttribute("y2", String(ly2));
     line.setAttribute("stroke", lc);
     line.setAttribute("stroke-width", String(lw));
-    rs.parkingLotSvg.append(line);
+    rs.parkingMarkingSvg.append(line);
   }
 
   // Compute bay centers and lane waypoints in SVG-global coords

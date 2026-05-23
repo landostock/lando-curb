@@ -67,6 +67,15 @@ const addMotorwayDashLayer = (): SVGGElement => {
   return layer;
 };
 
+const addParkingMarkingLayer = (): SVGGElement => {
+  const layer = createSvgElement("g");
+  layer.setAttribute("stroke-linecap", "round");
+  layer.setAttribute("stroke-linejoin", "round");
+  layer.setAttribute("fill", "none");
+  svgElement.append(layer);
+  return layer;
+};
+
 const addPendingStreetLayer = (): SVGGElement => {
   const layer = createSvgElement("g");
   layer.setAttribute("stroke-linecap", "round");
@@ -163,14 +172,15 @@ addGridToSvg();
 export const gridBlockLayer = addGridBlockLayer();
 export const baseLayer = addBaseLayer();
 export const streetShadowLayer = addStreetShadowLayer();
+export const borderLayer = addBorderLayer();
 export const streetLayer = addStreetLayer();
 export const pendingStreetLayer = addPendingStreetLayer();
 export const activeStreetLayer = addActiveStreetLayer();
 export const motorwayEdgeLayer = addMotorwayEdgeLayer();
 export const motorwayDashLayer = addMotorwayDashLayer();
+export const parkingMarkingLayer = addParkingMarkingLayer();
 export const houseShadowLayer = addHouseShadowLayer();
 export const commuterLayer = addCommuterLayer();
-export const borderLayer = addBorderLayer();
 export const treeShadowLayer = addTreeShadowLayer();
 export const houseLayer = addHouseLayer();
 export const landmarkLayer = addLandmarkLayer();
@@ -188,6 +198,7 @@ export const clearLayers = (): void => {
   activeStreetLayer.innerHTML = "";
   motorwayEdgeLayer.innerHTML = "";
   motorwayDashLayer.innerHTML = "";
+  parkingMarkingLayer.innerHTML = "";
   commuterLayer.innerHTML = "";
   pinLayer.innerHTML = "";
   lakeLayer.innerHTML = "";
