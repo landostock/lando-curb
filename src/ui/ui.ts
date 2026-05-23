@@ -259,10 +259,17 @@ export const setGameplayControlsVisible = (visible: boolean): void => {
   gameplayControlsVisible = visible;
   gridToggleButton.style.opacity = visible ? "1" : "0";
   gridToggleButton.style.pointerEvents = visible ? "all" : "none";
+  gridRedToggleButton.style.opacity = visible ? "1" : "0";
+  gridRedToggleButton.style.pointerEvents = visible ? "all" : "none";
+  gridRedToggleTooltip.style.pointerEvents = "none";
   audioModeButton.style.opacity = visible ? "1" : "0";
   audioModeButton.style.pointerEvents = visible ? "all" : "none";
+  gridToggleTooltip.style.pointerEvents = "none";
   updateDeveloperModeButtonVisibility();
-  if (!visible) gridToggleTooltip.style.opacity = "0";
+  if (!visible) {
+    gridToggleTooltip.style.opacity = "0";
+    gridRedToggleTooltip.style.opacity = "0";
+  }
 };
 
 export const setHelpButtonVisible = (visible: boolean): void => {
@@ -552,17 +559,31 @@ export const initUi = () => {
   gridRedToggleSvg.setAttribute("height", String(48));
   gridRedToggleSvgPath.setAttribute("fill", "none");
   gridRedToggleSvgPath.setAttribute("stroke", colors.red);
-  gridRedToggleSvgPath.setAttribute("stroke-width", String(2));
+  gridRedToggleSvgPath.setAttribute("stroke-width", String(1.45));
   gridRedToggleSvgPath.setAttribute("stroke-linecap", "round");
   gridRedToggleSvgPath.setAttribute("stroke-linejoin", "round");
   gridRedToggleSvgPath.style.transition = `all .3s`;
   gridRedToggleSvgPath.style.transformOrigin = "center";
+  gridRedToggleSvgPath.style.transformBox = "view-box";
   gridRedToggleSvg.append(gridRedToggleSvgPath);
   gridRedToggleButton.append(gridRedToggleSvg);
-  gridRedToggleButton.style.cssText = `position:absolute;bottom:72px;right:16px;padding:0;pointer-events:all;`;
+  gridRedToggleButton.style.cssText = `
+    position:absolute;
+    bottom:128px;
+    right:16px;
+    padding:0;
+    pointer-events:all;
+    display:grid;
+    place-items:center;
+    background:#fff8f5;
+  `;
   gridRedToggleButton.style.width = "48px";
   gridRedToggleButton.style.height = "48px";
   gridRedToggleButton.style.opacity = "0";
+  gridRedToggleButton.style.pointerEvents = "none";
+  gridRedToggleButton.style.boxShadow = `0 0 0 1px ${colors.red}12, 0 8px 18px ${colors.shade}`;
+  gridRedToggleButton.title = "Delete mode";
+  gridRedToggleButton.setAttribute("aria-label", "Delete mode");
   gridRedToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
@@ -573,12 +594,12 @@ export const initUi = () => {
     border-radius: 64px;
     padding: 0 64px 0 16px;
     white-space: pre;
-    pointer-events: all;
-    bottom: 72px;
-    background: ${colors.ui};
+    pointer-events: none;
+    bottom: 128px;
+    background: ${colors.red};
   `;
   gridRedToggleTooltip.style.height = "48px";
-  gridRedToggleTooltip.style.width = "96px";
+  gridRedToggleTooltip.style.width = "116px";
   gridRedToggleTooltip.style.opacity = "0";
   gridRedToggleTooltip.style.transition = `all .5s`;
 
@@ -594,7 +615,7 @@ export const initUi = () => {
   gridToggleSvgPath.style.transformOrigin = "center";
   gridToggleSvg.append(gridToggleSvgPath);
   gridToggleButton.append(gridToggleSvg);
-  gridToggleButton.style.cssText = `position:absolute;bottom:128px;right:16px;padding:0;pointer-events:all;`;
+  gridToggleButton.style.cssText = `position:absolute;bottom:184px;right:16px;padding:0;pointer-events:all;`;
   gridToggleButton.style.width = "48px";
   gridToggleButton.style.height = "48px";
   gridToggleButton.style.opacity = "0";
@@ -609,8 +630,8 @@ export const initUi = () => {
     border-radius: 64px;
     padding: 0 64px 0 16px;
     white-space: pre;
-    pointer-events: all;
-    bottom: 128px;
+    pointer-events: none;
+    bottom: 184px;
     background: ${colors.ui};
   `;
   gridToggleTooltip.style.height = "48px";
@@ -648,7 +669,7 @@ export const initUi = () => {
 
   developerModeButton.style.cssText = `
     position:absolute;
-    bottom:184px;
+    bottom:240px;
     right:16px;
     padding:0;
     pointer-events:all;
@@ -671,7 +692,7 @@ export const initUi = () => {
 
   timeLapseButton.style.cssText = `
     position:absolute;
-    bottom:240px;
+    bottom:296px;
     right:16px;
     padding:0;
     pointer-events:all;
@@ -803,7 +824,7 @@ export const initUi = () => {
     ),
     makeHelpBlock(
       "Remove",
-      "Right-click roads to remove them when a cleaner route opens up.",
+      "Use the red delete button or right-click roads when a cleaner route opens up.",
     ),
     makeHelpBlock(
       "Flow",
@@ -821,6 +842,7 @@ export const initUi = () => {
   helpOptions.innerHTML = `
     <span class="help-pill">Audio: All / Mute / Music / Effects</span>
     <span class="help-pill">Grid: Auto / On</span>
+    <span class="help-pill">Delete: Button / Right-click</span>
     <span class="help-pill">Pause: plan safely</span>
   `;
 
@@ -838,6 +860,7 @@ export const initUi = () => {
     <span class="help-shortcut"><span class="help-kbd">M</span><span>Mute</span></span>
     <span class="help-shortcut"><span class="help-kbd">S</span><span>New Song</span></span>
     <span class="help-shortcut"><span class="help-kbd">RMB</span><span>Remove road</span></span>
+    <span class="help-shortcut"><span class="help-kbd">Red</span><span>Touch delete mode</span></span>
   `;
 
   const helpActions = createElement();
@@ -1038,6 +1061,8 @@ export const initUi = () => {
     helpOverlay,
     helpButton,
     audioModeButton,
+    gridRedToggleTooltip,
+    gridRedToggleButton,
     gridToggleTooltip,
     gridToggleButton,
   );

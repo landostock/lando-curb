@@ -6,7 +6,7 @@ import { initAudio, startGameMusic } from "./audio";
 import { BusinessPark } from "./entities/business-park";
 import { House } from "./entities/house";
 import { bootMenu, gameState, initGameFlow, returnToMenu } from "./game-flow";
-import { gridLockToggle } from "./input/grid-toggle";
+import { gridLockToggle, gridRedLockToggle } from "./input/grid-toggle";
 import { initPointer } from "./input/pointer";
 import { renderWorld, tickWorld } from "./logic/orchestrator";
 import { setSpawnFactory } from "./logic/spawning";
@@ -19,6 +19,8 @@ import {
   audioModeButton,
   clock,
   developerMode,
+  gridRedToggleButton,
+  gridRedToggleTooltip,
   gridToggleButton,
   gridToggleTooltip,
   helpButton,
@@ -201,6 +203,12 @@ gridToggleButton.addEventListener("click", gridLockToggle, { signal });
 gridToggleTooltip.addEventListener("click", () => gridToggleButton.click(), {
   signal,
 });
+gridRedToggleButton.addEventListener("click", gridRedLockToggle, { signal });
+gridRedToggleTooltip.addEventListener(
+  "click",
+  () => gridRedToggleButton.click(),
+  { signal },
+);
 
 const handleDeveloperClockClick = (event: Event): void => {
   if (!(event instanceof MouseEvent)) return;

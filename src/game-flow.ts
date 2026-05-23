@@ -142,9 +142,7 @@ export const returnToMenu = (): void => {
   hideGameHud();
   setHelpButtonVisible(true);
   gridHide();
-  gridRedState.locked = false;
-  gridRedState.on = false;
-  gridRedHide();
+  resetDeleteMode();
   setMotorwayMode(false);
 
   resetState();
@@ -183,6 +181,12 @@ const toggleGameoverlay = (): void => {
   }
 };
 
+const resetDeleteMode = (): void => {
+  gridRedState.locked = false;
+  gridRedState.on = false;
+  gridRedHide();
+};
+
 export const checkGameOver = (): void => {
   for (const f of businessParks) {
     if (!f.isAlive()) {
@@ -198,8 +202,7 @@ export const checkGameOver = (): void => {
       focusOnLostPark(gameState.lostBusinessParkPosition);
 
       hideGameHud();
-      gridRedState.on = false;
-      gridRedHide();
+      resetDeleteMode();
 
       gameState.updateCount = 0;
       gameState.totalUpdateCount = 0;
