@@ -30,8 +30,8 @@ export const homeActionIndicatorCount = createElement();
 
 export const developerModeButton = createElement("button");
 export let developerMode = false;
-export const timeLapseButton = createElement("button");
-export let timeLapseMode = false;
+export type GameSpeed = 1 | 2 | 3;
+export let gameSpeed: GameSpeed = 1;
 let gameplayControlsVisible = false;
 let developerModeButtonSuppressed = false;
 let developerModeAccessGranted = false;
@@ -70,27 +70,6 @@ const setDeveloperModeButtonState = (): void => {
     : `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
 };
 
-const setTimeLapseButtonState = (): void => {
-  timeLapseButton.innerText = "x3";
-  timeLapseButton.title = timeLapseMode ? "Time Lapse: x3" : "Time Lapse: Off";
-  timeLapseButton.setAttribute("aria-label", timeLapseButton.title);
-  timeLapseButton.style.background = timeLapseMode ? colors.car3 : "#f7f7f0";
-  timeLapseButton.style.color = timeLapseMode ? "#fff" : colors.ui;
-  timeLapseButton.style.boxShadow = timeLapseMode
-    ? `0 0 0 2px #fff, 0 8px 24px ${colors.shade}`
-    : `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
-};
-
-export const setTimeLapseMode = (on: boolean): void => {
-  timeLapseMode = on && developerMode;
-  setTimeLapseButtonState();
-  updateDeveloperModeButtonVisibility();
-};
-
-export const toggleTimeLapseMode = (): void => {
-  setTimeLapseMode(!timeLapseMode);
-};
-
 export const enableDeveloperMode = ({
   skipConfirm = false,
 }: { skipConfirm?: boolean } = {}): void => {
@@ -120,10 +99,8 @@ export const requestDeveloperModeAccess = (): void => {
 
 export const resetDeveloperMode = (): void => {
   developerMode = false;
-  timeLapseMode = false;
   developerModeAccessGranted = false;
   setDeveloperModeButtonState();
-  setTimeLapseButtonState();
   updateInventoryCounters();
   updateDeveloperModeButtonVisibility();
 };
@@ -136,10 +113,6 @@ const updateDeveloperModeButtonVisibility = (): void => {
   developerModeButton.style.opacity = visible ? "1" : "0";
   developerModeButton.style.visibility = visible ? "visible" : "hidden";
   developerModeButton.style.pointerEvents = visible ? "all" : "none";
-  const timeLapseVisible = visible && developerMode;
-  timeLapseButton.style.opacity = timeLapseVisible ? "1" : "0";
-  timeLapseButton.style.visibility = timeLapseVisible ? "visible" : "hidden";
-  timeLapseButton.style.pointerEvents = timeLapseVisible ? "all" : "none";
 };
 
 export const pauseButton = createElement("button");
@@ -147,8 +120,38 @@ export const pauseSvgPath = createSvgElement("path");
 
 const clockCore = createSvgElement("circle");
 const clockBurst = createSvgElement("circle");
+const clockSpeedLabel = createSvgElement("text");
 const clockPips: SVGPathElement[] = [];
 let chargeCount = -1;
+
+const updateClockCoreForCharge = (): void => {
+  clockCore.style.transform =
+    gameSpeed > 1 ? "scale(0)" : chargeCount >= 9 ? "scale(1.8)" : "scale(0)";
+  clockCore.setAttribute(
+    "fill",
+    chargeCount >= 11 ? colors.red : chargeCount >= 9 ? colors.car3 : "#eee",
+  );
+};
+
+const setClockSpeedLabel = (): void => {
+  const boosted = gameSpeed > 1;
+  clock.title = boosted ? `Speed: ${gameSpeed}x` : "Speed: 1x";
+  clock.setAttribute("aria-label", clock.title);
+  clockSpeedLabel.textContent = boosted ? `${gameSpeed}x` : "";
+  clockSpeedLabel.style.opacity = boosted ? "1" : "0";
+  clockCore.style.opacity = boosted ? "0" : "1";
+  updateClockCoreForCharge();
+};
+
+export const setGameSpeed = (speed: GameSpeed): GameSpeed => {
+  gameSpeed = speed;
+  setClockSpeedLabel();
+  return gameSpeed;
+};
+
+export const cycleGameSpeed = (): GameSpeed => {
+  return setGameSpeed(gameSpeed === 1 ? 2 : gameSpeed === 2 ? 3 : 1);
+};
 
 const setClockTransitions = (enabled: boolean): void => {
   for (let i = 0; i < clockPips.length; i++) {
@@ -161,6 +164,9 @@ const setClockTransitions = (enabled: boolean): void => {
   }
   clockCore.style.transition = enabled
     ? `transform .4s cubic-bezier(.34, 1.9, .5, 1), fill .3s`
+    : "none";
+  clockSpeedLabel.style.transition = enabled
+    ? `opacity .18s ease, transform .28s cubic-bezier(.34, 1.9, .5, 1)`
     : "none";
 };
 
@@ -178,11 +184,9 @@ export const setUpgradeCharge = (progress: number): void => {
       lit && i >= 10 ? colors.red : lit && i >= 7 ? colors.car3 : "#eee",
     );
   }
-  clockCore.style.transform = count >= 9 ? "scale(1.8)" : "scale(0)";
-  clockCore.setAttribute(
-    "fill",
-    count >= 11 ? colors.red : count >= 9 ? colors.car3 : "#eee",
-  );
+  updateClockCoreForCharge();
+  clockSpeedLabel.style.transform =
+    gameSpeed > 1 && count >= 10 ? "scale(1.04)" : "scale(1)";
 };
 
 export const resetUpgradeCharge = (): void => {
@@ -191,6 +195,7 @@ export const resetUpgradeCharge = (): void => {
   setUpgradeCharge(0);
   clockCore.style.transform = "scale(0)";
   clockCore.setAttribute("fill", "#eee");
+  setClockSpeedLabel();
   clockBurst.style.animation = "none";
   clockBurst.style.opacity = "0";
   void clock.getBoundingClientRect();
@@ -402,6 +407,9 @@ export const initUi = () => {
     background: ${colors.ui};
     color: #eee;
     font-size: 20px;
+    cursor: pointer;
+    pointer-events: none;
+    touch-action: manipulation;
   `;
   scoreCounters.style.transition = `opacity 1s`;
   scoreCounters.style.opacity = "0";
@@ -470,6 +478,21 @@ export const initUi = () => {
   clockCore.style.transition = `transform .4s cubic-bezier(.34, 1.9, .5, 1), fill .3s`;
   clockSvg.append(clockCore);
 
+  clockSpeedLabel.setAttribute("x", "8");
+  clockSpeedLabel.setAttribute("y", "8.25");
+  clockSpeedLabel.setAttribute("text-anchor", "middle");
+  clockSpeedLabel.setAttribute("dominant-baseline", "middle");
+  clockSpeedLabel.setAttribute("fill", "#eee");
+  clockSpeedLabel.style.fontSize = "3.05px";
+  clockSpeedLabel.style.fontWeight = "900";
+  clockSpeedLabel.style.letterSpacing = "0";
+  clockSpeedLabel.style.pointerEvents = "none";
+  clockSpeedLabel.style.transformBox = "view-box";
+  clockSpeedLabel.style.transformOrigin = "8px 8px";
+  clockSpeedLabel.style.transition = `opacity .18s ease, transform .28s cubic-bezier(.34, 1.9, .5, 1)`;
+  clockSpeedLabel.style.opacity = "0";
+  clockSvg.append(clockSpeedLabel);
+
   clockBurst.setAttribute("cx", "8");
   clockBurst.setAttribute("cy", "8");
   clockBurst.setAttribute("r", "4");
@@ -481,6 +504,7 @@ export const initUi = () => {
   clockSvg.append(clockBurst);
 
   clock.append(clockSvg);
+  setClockSpeedLabel();
 
   pathTilesIndicator.style.cssText = `
     position: absolute;
@@ -690,29 +714,6 @@ export const initUi = () => {
   });
   setDeveloperModeButtonState();
 
-  timeLapseButton.style.cssText = `
-    position:absolute;
-    bottom:296px;
-    right:16px;
-    padding:0;
-    pointer-events:all;
-    display:grid;
-    place-items:center;
-    font-size:14px;
-    line-height:1;
-    letter-spacing:0;
-    z-index:5;
-  `;
-  timeLapseButton.style.width = "48px";
-  timeLapseButton.style.height = "48px";
-  timeLapseButton.style.opacity = "0";
-  timeLapseButton.style.visibility = "hidden";
-  timeLapseButton.style.pointerEvents = "none";
-  timeLapseButton.addEventListener("click", () => {
-    toggleTimeLapseMode();
-  });
-  setTimeLapseButtonState();
-
   helpButton.style.cssText = `
     position:absolute;
     bottom:16px;
@@ -843,6 +844,7 @@ export const initUi = () => {
     <span class="help-pill">Audio: All / Mute / Music / Effects</span>
     <span class="help-pill">Grid: Auto / On</span>
     <span class="help-pill">Delete: Button / Right-click</span>
+    <span class="help-pill">Clock: 1x / 2x / 3x</span>
     <span class="help-pill">Pause: plan safely</span>
   `;
 
@@ -1066,10 +1068,11 @@ export const initUi = () => {
     gridToggleTooltip,
     gridToggleButton,
   );
-  document.body.append(developerModeButton, timeLapseButton);
+  document.body.append(developerModeButton);
 };
 
 export const resetHudCounters = (): void => {
+  setGameSpeed(1);
   updateInventoryCounters();
   pickupCount.innerText = "0";
   resetUpgradeCharge();
@@ -1077,6 +1080,7 @@ export const resetHudCounters = (): void => {
 
 export const hideGameHud = (): void => {
   scoreCounters.style.opacity = "0";
+  scoreCounters.style.pointerEvents = "none";
   clock.style.opacity = "0";
   clock.style.pointerEvents = "none";
   pathTilesIndicator.style.opacity = "0";

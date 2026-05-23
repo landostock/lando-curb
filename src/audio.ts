@@ -579,6 +579,32 @@ export const playUpgradeSound = (): void => {
   );
 };
 
+export const playSpeedToggleSound = (speed: 1 | 2 | 3): void => {
+  markMusicActivity(0.18);
+  const notes: Record<1 | 2 | 3, [number, number]> = {
+    1: [392, 294],
+    2: [440, 660],
+    3: [523.25, 783.99],
+  };
+  const [first, second] = notes[speed];
+  playTone({
+    frequency: first,
+    duration: 0.07,
+    volume: 0.038,
+    type: "triangle",
+    bend: speed === 1 ? 0.92 : 1.12,
+  });
+  setTimeout(() => {
+    playTone({
+      frequency: second,
+      duration: 0.09,
+      volume: 0.032,
+      type: "sine",
+      bend: speed === 1 ? 0.9 : 1.08,
+    });
+  }, 48);
+};
+
 export const playUpgradeReadyFanfare = (): void => {
   markMusicActivity(0.55);
   const notes = [392, 523.25, 659.25, 783.99];

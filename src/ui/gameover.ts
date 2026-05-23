@@ -283,6 +283,7 @@ export const showGameover = (): void => {
   gridToggleTooltip.style.opacity = "0";
   setGameplayControlsVisible(false);
   scoreCounters.style.opacity = "0";
+  scoreCounters.style.pointerEvents = "none";
 
   setTimeout(() => {
     toggleGameoverlayButton.style.pointerEvents = ""; // Is separate from the gameoverWrapper

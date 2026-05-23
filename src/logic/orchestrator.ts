@@ -59,7 +59,10 @@ export const commitStreetChanges = (
 // ─── Tick phases ──────────────────────────────────────────────────────
 
 const revealHudMilestones = (tick: number): void => {
-  if (tick === TIMING.hud.score) scoreCounters.style.opacity = "1";
+  if (tick === TIMING.hud.score) {
+    scoreCounters.style.opacity = "1";
+    scoreCounters.style.pointerEvents = "all";
+  }
   if (tick === TIMING.hud.inventory) {
     pathTilesIndicator.style.opacity = "1";
     motorwayIndicator.style.opacity = "1";

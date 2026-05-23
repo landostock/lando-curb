@@ -2,7 +2,7 @@
 import { GameLoop } from "kontra";
 
 import type { AudioMode } from "./audio";
-import { initAudio, startGameMusic } from "./audio";
+import { initAudio, playSpeedToggleSound, startGameMusic } from "./audio";
 import { BusinessPark } from "./entities/business-park";
 import { House } from "./entities/house";
 import { bootMenu, gameState, initGameFlow, returnToMenu } from "./game-flow";
@@ -18,7 +18,8 @@ import { initHomeActions } from "./ui/home-actions";
 import {
   audioModeButton,
   clock,
-  developerMode,
+  cycleGameSpeed,
+  gameSpeed,
   gridRedToggleButton,
   gridRedToggleTooltip,
   gridToggleButton,
@@ -32,8 +33,8 @@ import {
   pauseButton,
   pauseSvgPath,
   requestDeveloperModeAccess,
+  scoreCounters,
   setAudioModeButton,
-  timeLapseMode,
 } from "./ui/ui";
 
 interface HmrData {
@@ -69,8 +70,7 @@ const loop = GameLoop({
   clearCanvas: false,
   update: () => {
     if (window.__landoLoopToken !== loopToken) return;
-    const steps = developerMode && timeLapseMode ? 3 : 1;
-    for (let i = 0; i < steps; i++) {
+    for (let i = 0; i < gameSpeed; i++) {
       tickWorld(loop);
       if (loop.isStopped) break;
     }
@@ -160,9 +160,9 @@ const addDeveloperAccessListener = (target: EventTarget): void => {
 
 let helpOpen = false;
 let resumeAfterHelp = false;
-let developerClockClicks = 0;
-let developerClockWindowStart = 0;
-let developerClockResetTimer: ReturnType<typeof setTimeout> | undefined;
+let developerScoreClicks = 0;
+let developerScoreWindowStart = 0;
+let developerScoreResetTimer: ReturnType<typeof setTimeout> | undefined;
 
 const openHelp = (): void => {
   if (helpOpen) return;
@@ -210,31 +210,40 @@ gridRedToggleTooltip.addEventListener(
   { signal },
 );
 
-const handleDeveloperClockClick = (event: Event): void => {
+const handleClockClick = (event: Event): void => {
+  if (!(event instanceof MouseEvent)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const speed = cycleGameSpeed();
+  playSpeedToggleSound(speed);
+};
+
+const handleDeveloperScoreClick = (event: Event): void => {
   if (!(event instanceof MouseEvent)) return;
   event.preventDefault();
   event.stopPropagation();
   const now = performance.now();
-  if (developerClockWindowStart === 0 || now - developerClockWindowStart > 2000) {
-    developerClockWindowStart = now;
-    developerClockClicks = 0;
+  if (developerScoreWindowStart === 0 || now - developerScoreWindowStart > 2000) {
+    developerScoreWindowStart = now;
+    developerScoreClicks = 0;
   }
-  developerClockClicks += 1;
-  clearTimeout(developerClockResetTimer);
-  if (developerClockClicks >= 3) {
-    developerClockClicks = 0;
-    developerClockWindowStart = 0;
+  developerScoreClicks += 1;
+  clearTimeout(developerScoreResetTimer);
+  if (developerScoreClicks >= 3) {
+    developerScoreClicks = 0;
+    developerScoreWindowStart = 0;
     requestDeveloperModeAccess();
     return;
   }
-  const resetDelay = Math.max(0, 2000 - (now - developerClockWindowStart));
-  developerClockResetTimer = setTimeout(() => {
-    developerClockClicks = 0;
-    developerClockWindowStart = 0;
+  const resetDelay = Math.max(0, 2000 - (now - developerScoreWindowStart));
+  developerScoreResetTimer = setTimeout(() => {
+    developerScoreClicks = 0;
+    developerScoreWindowStart = 0;
   }, resetDelay);
 };
 
-clock.addEventListener("click", handleDeveloperClockClick, { signal });
+clock.addEventListener("click", handleClockClick, { signal });
+scoreCounters.addEventListener("click", handleDeveloperScoreClick, { signal });
 helpButton.addEventListener("click", openHelp, { signal });
 helpCloseButton.addEventListener("click", closeHelp, { signal });
 helpMenuButton.addEventListener(
