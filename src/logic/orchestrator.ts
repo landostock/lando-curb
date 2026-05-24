@@ -92,7 +92,7 @@ const maybeNominateTrending = (tick: number): void => {
       !bp.trending &&
       bp.age >= cfg.trendingMinAge,
   );
-  pickRandom(eligible)?.startTrending();
+  pickRandom(eligible)?.startTrending(tick);
 };
 
 const ensureUpgradeSchedule = (tick: number): void => {

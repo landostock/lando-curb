@@ -3,6 +3,10 @@ import { colors } from "../gfx/colors";
 import { businessParks, houses, trees } from "../state";
 import type { Cell, Direction, Point, Rect } from "../types";
 import { pickRandom, shuffle, weightedRandom } from "../util/random";
+import {
+  DEFAULT_DEMAND_MODEL,
+  type DemandModelConfig,
+} from "./demand-model-config";
 import { isAreaFree, streetWouldClipBuilding } from "./placement-obstacles";
 import { TIMING } from "./timing";
 
@@ -184,6 +188,9 @@ export interface SpawningConfig {
   /** Weight multiplier for popular parks in demand targeting */
   popularDemandWeight: number;
 
+  /** Per-BP demand personality, local waves, and service-quality feedback. */
+  demandModel: DemandModelConfig;
+
   eras: SpawnEra[];
 }
 
@@ -227,6 +234,8 @@ export const DEFAULT_CONFIG: SpawningConfig = {
   trendingDemandBurst: 6,
   trendingMinAge: TIMING.difficulty.trendingMinAge,
   popularDemandWeight: 2,
+
+  demandModel: DEFAULT_DEMAND_MODEL,
 
   eras: [
     {

@@ -6,6 +6,10 @@ import {
   dispatchCommutersFor,
   hasDispatchableCommuter,
 } from "../logic/commuter-dispatch";
+import {
+  type BusinessParkDemandProfile,
+  readDemandStackLimit,
+} from "../logic/demand-model-config";
 import { updateGridData } from "../logic/find-route";
 import { getSpawningConfig } from "../logic/spawning";
 import { addStreet, businessParks, session } from "../state";
@@ -32,6 +36,7 @@ export interface BusinessParkProperties {
   parkingCapacity?: number;
   parkingRotation?: number;
   parkingVariant?: number;
+  demandProfile?: BusinessParkDemandProfile;
   silentAppearChime?: boolean;
   [key: string]: unknown;
 }
@@ -56,6 +61,25 @@ const compactPixels = (points: Pixel[]): Pixel[] => {
       route.push(point);
   }
   return route;
+};
+
+const randomRange = ([min, max]: [number, number]): number =>
+  min + Math.random() * (max - min);
+
+const createDemandProfile = (): BusinessParkDemandProfile => {
+  const profile = getSpawningConfig().demandModel.profile;
+  const pulsePeriod = Math.round(randomRange(profile.pulsePeriodRange));
+  return {
+    baseIntensity: randomRange(profile.baseIntensityRange),
+    pulseAmplitude: randomRange(profile.pulseAmplitudeRange),
+    pulsePeriod,
+    pulsePhase: Math.floor(Math.random() * pulsePeriod),
+    rushAffinity: randomRange(profile.rushAffinityRange),
+    localWaveAffinity: randomRange(profile.localWaveAffinityRange),
+    performanceSensitivity: randomRange(profile.performanceSensitivityRange),
+    timerDrainMultiplier: randomRange(profile.timerDrainMultiplierRange),
+    serviceRewardMultiplier: randomRange(profile.serviceRewardMultiplierRange),
+  };
 };
 
 export class BusinessPark extends GameObjectClass {
@@ -105,6 +129,7 @@ export class BusinessPark extends GameObjectClass {
   entryEdge = 2; // 0=top, 1=right, 2=bottom, 3=left
   parkingRotation = 0;
   parkingVariant = 0;
+  demandProfile: BusinessParkDemandProfile;
 
   get bayHeading(): Direction {
     if (this.parkingRotation === 1) return { x: 1, y: 0 } as Direction;
@@ -242,11 +267,18 @@ export class BusinessPark extends GameObjectClass {
     return this.types.includes(color);
   }
 
-  startTrending(): void {
+  startTrending(tick: number): void {
     const cfg = getSpawningConfig();
     this.trending = true;
     this.trendingTimer = cfg.trendingWindow;
-    this.demand += cfg.trendingDemandBurst;
+    const demandLimit = Math.min(
+      cfg.demandPinCap,
+      readDemandStackLimit(cfg.demandModel.stackLimit, tick),
+    );
+    this.demand = Math.min(
+      demandLimit,
+      this.demand + cfg.trendingDemandBurst,
+    );
   }
 
   constructor(properties: BusinessParkProperties) {
@@ -257,6 +289,7 @@ export class BusinessPark extends GameObjectClass {
     this.types = properties.borderColors ?? [properties.borderColor];
     this.type = this.types[0]!;
     this.appearing = true;
+    this.demandProfile = properties.demandProfile ?? createDemandProfile();
 
     for (let w = 0; w < this.width; w++) {
       for (let h = 0; h < this.height; h++) {
@@ -290,7 +323,8 @@ export class BusinessPark extends GameObjectClass {
     pickupCount.innerText = String(session.pickups);
     const cfg = getSpawningConfig();
     this.demandTimer = Math.min(
-      this.demandTimer + cfg.commuterTimerBonus,
+      this.demandTimer +
+        cfg.commuterTimerBonus * this.demandProfile.serviceRewardMultiplier,
       cfg.demandTimerMax,
     );
 
@@ -312,9 +346,9 @@ export class BusinessPark extends GameObjectClass {
         const noRouteAvailable = !hasDispatchableCommuter(this);
         const routedPressure = Math.min(4, pendingDemand);
         const unroutedPressure = Math.min(0.35, pendingDemand * 0.18);
-        this.demandTimer -= noRouteAvailable
-          ? unroutedPressure
-          : routedPressure;
+        const pressure = noRouteAvailable ? unroutedPressure : routedPressure;
+        this.demandTimer -=
+          pressure * this.demandProfile.timerDrainMultiplier;
       } else {
         this.demandTimer = Math.min(
           this.demandTimer + cfg.demandTimerRecovery,

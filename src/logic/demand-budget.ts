@@ -1,11 +1,22 @@
 import type { BusinessPark } from "../entities/business-park";
 import { businessParks, commuters, session } from "../state";
 import type { Cell } from "../types";
+import { readDemandStackLimit } from "./demand-model-config";
 import { findRoute, routeCrossesPending } from "./find-route";
 import { getCurrentEra, getSpawningConfig } from "./spawning";
 
 const SPIKE_COOLDOWN = 120;
 const QUIET_TICK_THRESHOLD = 15 * 20;
+const TAU = Math.PI * 2;
+
+export interface LocalDemandWave {
+  x: number;
+  y: number;
+  radius: number;
+  intensity: number;
+  endsAt: number;
+  color?: string;
+}
 
 let budgets = new Map<
   string,
@@ -16,9 +27,14 @@ let budgets = new Map<
     quietTicks: number;
   }
 >();
+let activeDemandWaves: LocalDemandWave[] = [];
+
+export const getActiveDemandWaves = (): readonly LocalDemandWave[] =>
+  activeDemandWaves;
 
 export function initDemandBudgets(): void {
   budgets = new Map();
+  activeDemandWaves = [];
   for (const pt of getSpawningConfig().parkTypes) {
     budgets.set(pt.color, {
       accumulator: 0,
@@ -30,6 +46,7 @@ export function initDemandBudgets(): void {
 }
 
 export function resetDemandBudgets(): void {
+  activeDemandWaves = [];
   for (const b of budgets.values()) {
     b.accumulator = 0;
     b.spikeCooldown = 0;
@@ -40,6 +57,9 @@ export function resetDemandBudgets(): void {
 export function tickDemandBudgets(tick: number): void {
   const cfg = getSpawningConfig();
   const era = getCurrentEra(tick);
+  const rushSignal = readRushSignal(tick, era.rushAmplitude);
+
+  updateLocalDemandWaves(tick, rushSignal);
 
   for (const bp of businessParks) {
     for (const t of bp.types) {
@@ -54,17 +74,6 @@ export function tickDemandBudgets(tick: number): void {
       }
     }
   }
-
-  const rushLen = Math.max(
-    cfg.rushCycleLengthMin,
-    cfg.rushCycleLengthInitial - Math.floor(tick / cfg.rushCycleShrinkRate),
-  );
-  const rush =
-    tick > cfg.rushStartTick
-      ? 1 +
-        Math.max(0, Math.sin(((tick % rushLen) / rushLen) * Math.PI * 2)) *
-          era.rushAmplitude
-      : 1;
 
   for (const [color, b] of budgets) {
     const parks = businessParks.filter(
@@ -93,25 +102,164 @@ export function tickDemandBudgets(tick: number): void {
       parks: parks.length,
       tick,
     });
+    const meanParkFactor = readMeanDemandFactor(parks, color, tick, rushSignal);
 
     b.accumulator +=
       (capacity + tick / cfg.demandLinearScaleDivisor) *
-      rush *
       spike *
+      meanParkFactor *
       director.multiplier *
       b.demandRate *
       Math.min(1.25, idle / 2);
 
     while (b.accumulator >= 1) {
-      b.accumulator--;
-      addDirectedDemand(
+      const assigned = addDirectedDemand(
         parks,
         color,
         director.burst,
         cfg.demandRandomTargetChance,
+        tick,
+        rushSignal,
       );
+      if (!assigned) {
+        b.accumulator = 0.99;
+        break;
+      }
+      b.accumulator--;
     }
   }
+}
+
+function readRushSignal(tick: number, amplitude: number): number {
+  const cfg = getSpawningConfig();
+  if (tick <= cfg.rushStartTick) return 0;
+
+  const rushLen = Math.max(
+    cfg.rushCycleLengthMin,
+    cfg.rushCycleLengthInitial - Math.floor(tick / cfg.rushCycleShrinkRate),
+  );
+  return Math.max(0, Math.sin(((tick % rushLen) / rushLen) * TAU)) * amplitude;
+}
+
+function updateLocalDemandWaves(tick: number, rushSignal: number): void {
+  const cfg = getSpawningConfig().demandModel.localWaves;
+  activeDemandWaves = activeDemandWaves.filter((wave) => wave.endsAt > tick);
+  if (
+    !cfg.enabled ||
+    tick < cfg.startTick ||
+    activeDemandWaves.length >= cfg.maxActive
+  ) {
+    return;
+  }
+
+  const spawnChance =
+    cfg.spawnChancePerDemandTick * (1 + rushSignal * cfg.rushSpawnBoost);
+  if (Math.random() >= spawnChance) return;
+
+  const active = businessParks.filter((bp) => !bp.appearing);
+  if (!active.length) return;
+
+  const centerPark = active[Math.floor(Math.random() * active.length)]!;
+  const duration = randomRange(cfg.durationRange);
+  const baseIntensity = randomRange(cfg.intensityRange);
+  const jitter = cfg.centerJitterRadius;
+  activeDemandWaves.push({
+    x: centerPark.x + centerPark.width / 2 + (Math.random() * 2 - 1) * jitter,
+    y: centerPark.y + centerPark.height / 2 + (Math.random() * 2 - 1) * jitter,
+    radius: randomRange(cfg.radiusRange),
+    intensity: baseIntensity * (1 + rushSignal * cfg.rushIntensityBoost),
+    endsAt: tick + duration,
+    color:
+      Math.random() < cfg.affectedColorChance
+        ? centerPark.types[Math.floor(Math.random() * centerPark.types.length)]
+        : undefined,
+  });
+}
+
+function randomRange([min, max]: [number, number]): number {
+  return min + Math.random() * (max - min);
+}
+
+function readMeanDemandFactor(
+  parks: BusinessPark[],
+  color: string,
+  tick: number,
+  rushSignal: number,
+): number {
+  const cfg = getSpawningConfig().demandModel.factors;
+  const mean =
+    parks.reduce(
+      (sum, bp) => sum + readDemandFactor(bp, color, tick, rushSignal),
+      0,
+    ) / parks.length;
+
+  return clamp(mean, cfg.meanFactorMin, cfg.meanFactorMax);
+}
+
+function readDemandFactor(
+  bp: BusinessPark,
+  color: string,
+  tick: number,
+  rushSignal: number,
+): number {
+  const cfg = getSpawningConfig().demandModel;
+  const profile = bp.demandProfile;
+  const pulse =
+    1 +
+    Math.sin(((tick + profile.pulsePhase) / profile.pulsePeriod) * TAU) *
+      profile.pulseAmplitude;
+  const macroRush =
+    1 +
+    rushSignal * profile.rushAffinity * cfg.factors.macroRushBaselineShare;
+  const localRush =
+    1 + readLocalWavePressure(bp, color) * profile.localWaveAffinity;
+  const performance = readPerformanceDemandFactor(bp);
+
+  return clamp(
+    profile.baseIntensity * pulse * macroRush * localRush * performance,
+    cfg.factors.minParkFactor,
+    cfg.factors.maxParkFactor,
+  );
+}
+
+function readLocalWavePressure(bp: BusinessPark, color: string): number {
+  const cfg = getSpawningConfig().demandModel.localWaves;
+  const center = { x: bp.x + bp.width / 2, y: bp.y + bp.height / 2 };
+  let pressure = 0;
+
+  for (const wave of activeDemandWaves) {
+    if (wave.color && wave.color !== color) continue;
+    const distance = Math.hypot(wave.x - center.x, wave.y - center.y);
+    if (distance >= wave.radius) continue;
+    const falloff = (1 - distance / wave.radius) ** cfg.falloffPower;
+    pressure += wave.intensity * falloff;
+  }
+
+  return pressure;
+}
+
+function readPerformanceDemandFactor(bp: BusinessPark): number {
+  const cfg = getSpawningConfig();
+  const performance = cfg.demandModel.performance;
+  const timerRatio = clamp(bp.demandTimer / cfg.demandTimerMax, 0, 1);
+  const unserved = Math.max(0, bp.demand - bp.activeFulfillmentCount);
+  const stress = clamp(
+    (1 - timerRatio) * performance.timerStressWeight +
+      unserved * performance.unservedStressWeight -
+      bp.activeFulfillmentCount * performance.activeFulfillmentRelief,
+    -performance.maxStress,
+    performance.maxStress,
+  );
+
+  return clamp(
+    1 + stress * bp.demandProfile.performanceSensitivity * performance.reactionStrength,
+    performance.minMultiplier,
+    performance.maxMultiplier,
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 interface PressureSnapshot {
@@ -200,25 +348,39 @@ function addDirectedDemand(
   color: string,
   burst: number,
   randomChance: number,
-): void {
+  tick: number,
+  rushSignal: number,
+): boolean {
+  let assigned = false;
   for (let i = 0; i < burst; i++) {
-    pickPark(parks, color, randomChance).demand++;
+    const park = pickPark(parks, color, randomChance, tick, rushSignal);
+    if (!park) break;
+    park.demand++;
+    assigned = true;
   }
+  return assigned;
 }
 
 function pickPark(
   parks: BusinessPark[],
   color: string,
   randomChance: number,
-): BusinessPark {
+  tick: number,
+  rushSignal: number,
+): BusinessPark | undefined {
   const reachable = parks.filter((bp) => canServePark(bp, color));
-  const targets = reachable.length ? reachable : parks;
+  const demandLimit = readCurrentDemandLimit(tick);
+  const targets = (reachable.length ? reachable : parks).filter(
+    (bp) => bp.demand < demandLimit,
+  );
+  if (!targets.length) return undefined;
 
   if (Math.random() < randomChance) {
     // Popular parks get higher weight, but avoid dumping waves onto the same full pin stack.
     const cfg = getSpawningConfig();
     const weights = targets.map(
       (bp) =>
+        readDemandFactor(bp, color, tick, rushSignal) *
         (bp.popular ? cfg.popularDemandWeight : 1) *
         (bp.trending ? 1.8 : 1) *
         (1 / Math.max(1, bp.demand - bp.activeFulfillmentCount + 1)),
@@ -232,9 +394,9 @@ function pickPark(
     return targets[targets.length - 1]!;
   }
   let best = targets[0]!;
-  let bestScore = demandTargetScore(best);
+  let bestScore = demandTargetScore(best, color, tick, rushSignal);
   for (let i = 1; i < targets.length; i++) {
-    const score = demandTargetScore(targets[i]!);
+    const score = demandTargetScore(targets[i]!, color, tick, rushSignal);
     if (score < bestScore) {
       best = targets[i]!;
       bestScore = score;
@@ -243,11 +405,25 @@ function pickPark(
   return best;
 }
 
-function demandTargetScore(bp: BusinessPark): number {
+function readCurrentDemandLimit(tick: number): number {
+  const cfg = getSpawningConfig();
+  return Math.min(
+    cfg.demandPinCap,
+    readDemandStackLimit(cfg.demandModel.stackLimit, tick),
+  );
+}
+
+function demandTargetScore(
+  bp: BusinessPark,
+  color: string,
+  tick: number,
+  rushSignal: number,
+): number {
   const unserved = Math.max(0, bp.demand - bp.activeFulfillmentCount);
   const trendBonus = bp.trending ? -2 : 0;
   const popularBonus = bp.popular ? -0.5 : 0;
-  return bp.demand + unserved * 2 + trendBonus + popularBonus;
+  const demandFactor = readDemandFactor(bp, color, tick, rushSignal);
+  return (bp.demand + unserved * 2 + trendBonus + popularBonus) / demandFactor;
 }
 
 function canServePark(bp: BusinessPark, color: string): boolean {

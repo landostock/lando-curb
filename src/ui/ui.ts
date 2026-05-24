@@ -220,6 +220,15 @@ export const setGameSpeed = (speed: GameSpeed): GameSpeed => {
   return gameSpeed;
 };
 
+export const canChangeGameSpeed = (): boolean =>
+  gameplayControlsVisible && challengeForcedSpeed() === undefined;
+
+export const chooseGameSpeed = (speed: GameSpeed): GameSpeed => {
+  const forced = challengeForcedSpeed();
+  if (forced) return setGameSpeed(forced);
+  return setGameSpeed(speed);
+};
+
 export const cycleGameSpeed = (): GameSpeed => {
   const forced = challengeForcedSpeed();
   if (forced) return setGameSpeed(forced);

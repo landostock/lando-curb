@@ -34,8 +34,11 @@ import {
 } from "./ui/session-menu";
 import {
   audioModeButton,
+  canChangeGameSpeed,
+  chooseGameSpeed,
   clock,
   cycleGameSpeed,
+  type GameSpeed,
   gameSpeed,
   gridRedToggleButton,
   gridRedToggleTooltip,
@@ -283,6 +286,7 @@ const handleClockClick = (event: Event): void => {
   if (!(event instanceof MouseEvent)) return;
   event.preventDefault();
   event.stopPropagation();
+  if (!canChangeGameSpeed()) return;
   const speed = cycleGameSpeed();
   playSpeedToggleSound(speed);
 };
@@ -367,6 +371,24 @@ const isPlainShortcutEvent = (event: KeyboardEvent): boolean =>
 const shortcutKey = (event: KeyboardEvent, code: string, key: string): boolean =>
   event.code === code || event.key.toLowerCase() === key;
 
+const shortcutDigit = (event: KeyboardEvent): GameSpeed | undefined => {
+  if (event.code === "Digit1" || event.code === "Numpad1") return 1;
+  if (event.code === "Digit2" || event.code === "Numpad2") return 2;
+  if (event.code === "Digit3" || event.code === "Numpad3") return 3;
+  return undefined;
+};
+
+const isEditableTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    target.isContentEditable ||
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT"
+  );
+};
+
 const handleGlobalKeydown = (event: KeyboardEvent): void => {
   if (event.key === "Escape") {
     event.preventDefault();
@@ -375,7 +397,18 @@ const handleGlobalKeydown = (event: KeyboardEvent): void => {
     return;
   }
   if (isSessionMenuOpen()) return;
+  if (isEditableTarget(event.target)) return;
   if (!isPlainShortcutEvent(event)) return;
+
+  const requestedSpeed = shortcutDigit(event);
+  if (requestedSpeed && canChangeGameSpeed()) {
+    event.preventDefault();
+    if (requestedSpeed !== gameSpeed) {
+      chooseGameSpeed(requestedSpeed);
+      playSpeedToggleSound(requestedSpeed);
+    }
+    return;
+  }
 
   const shortcuts = [
     {
