@@ -1,14 +1,17 @@
 import { GameObjectClass } from "kontra";
 
 import { playAppearChime } from "../audio";
+import { challengeDisablesDelete } from "../challenge";
 import { colors } from "../gfx/colors";
 import { baseLayer, houseLayer, houseShadowLayer } from "../gfx/layers";
 import { createSvgElement, toSvgPoint } from "../gfx/svg-utils";
+import { streetWouldMixColors } from "../logic/color-lock";
 import {
   findRoute,
   streetMatchesEdge,
   updateGridData,
 } from "../logic/find-route";
+import { streetWouldCreateIntersection } from "../logic/intersections";
 import { commitStreetChanges } from "../logic/orchestrator";
 import { cellInLake, cellIsBlocked } from "../logic/placement-obstacles";
 import { isStreetEdge } from "../logic/street-edge";
@@ -52,18 +55,8 @@ export class House extends GameObjectClass {
     style?: string;
     [key: string]: unknown;
   }) {
-    const { x, y } = properties;
-
     super(properties);
     this.style = properties.style ?? "default";
-
-    this.startPath = new Street({
-      points: [
-        { x, y, locked: true },
-        { x: x + this.facing.x, y: y + this.facing.y, locked: true },
-      ],
-    });
-    addStreet(this.startPath);
 
     this.streetDrawTimer = setTimeout(() => {
       if (this.removed) return;
@@ -97,11 +90,12 @@ export class House extends GameObjectClass {
 
   rotateTo(x: number, y: number): boolean {
     const oldStartPath = this.startPath;
-    if (!oldStartPath) return false;
 
     // No-op guard.
-    if (x === this.x + this.facing.x && y === this.y + this.facing.y)
+    if (oldStartPath && x === this.x + this.facing.x && y === this.y + this.facing.y)
       return false;
+
+    if (oldStartPath && challengeDisablesDelete()) return false;
 
     const houseCell = { x: this.x, y: this.y } as Cell;
     const targetCell = { x, y } as Cell;
@@ -112,6 +106,14 @@ export class House extends GameObjectClass {
     if (cellInLake(targetCell)) return false;
     if (houses.some((h) => h !== this && h.x === x && h.y === y))
       return false;
+
+    const replacedPaths = oldStartPath ? [oldStartPath] : [];
+    if (streetWouldCreateIntersection(houseCell, targetCell, replacedPaths)) {
+      return false;
+    }
+    if (streetWouldMixColors(houseCell, targetCell, replacedPaths)) {
+      return false;
+    }
 
     const retiredStartPath = this.findRetiredStartPath(houseCell, targetCell);
     const stagedNew =
@@ -178,14 +180,14 @@ export class House extends GameObjectClass {
       }
 
       oldStartPathStillNeeded = activeCommuters.some(
-        (child) => !canReachHome(child, oldStartPath),
+        (child) => oldStartPath !== undefined && !canReachHome(child, oldStartPath),
       );
     }
 
     this.facing = { x: x - this.x, y: y - this.y } as Direction;
     this.startPath = stagedNew;
-    if (oldStartPathStillNeeded) this.retireStartPath(oldStartPath);
-    else oldStartPath.remove();
+    if (oldStartPath && oldStartPathStillNeeded) this.retireStartPath(oldStartPath);
+    else oldStartPath?.remove();
     commitStreetChanges(false, { noShadow: true });
     return true;
   }

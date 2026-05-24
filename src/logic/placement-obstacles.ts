@@ -26,27 +26,37 @@ export const cellInLake = ({ x, y }: Cell): boolean =>
 const businessParkInCell = ({ x, y }: Cell) =>
   businessParks.find((bp) => bp.points.some((p) => p.x === x && p.y === y));
 
+const businessParkDrivewayPoints = (bp: (typeof businessParks)[number]): Cell[] => {
+  if (bp.startPath) return [...bp.startPath.points];
+  if (!bp.entryCell) return [];
+  const dx = bp.entryEdge === 1 ? 1 : bp.entryEdge === 3 ? -1 : 0;
+  const dy = bp.entryEdge === 2 ? 1 : bp.entryEdge === 0 ? -1 : 0;
+  return [
+    bp.entryCell,
+    { x: bp.entryCell.x + dx, y: bp.entryCell.y + dy } as Cell,
+  ];
+};
+
 const isHouseDrivewayEdge = (a: Cell, b: Cell): boolean =>
   houses.some((house) => {
-    const driveway = {
-      x: house.x + house.facing.x,
-      y: house.y + house.facing.y,
-    };
+    const [houseCell, driveway] = house.startPath?.points ?? [];
     return (
-      (house.x === a.x &&
-        house.y === a.y &&
+      houseCell &&
+      driveway &&
+      ((houseCell.x === a.x &&
+        houseCell.y === a.y &&
         driveway.x === b.x &&
         driveway.y === b.y) ||
-      (house.x === b.x &&
-        house.y === b.y &&
+        (houseCell.x === b.x &&
+        houseCell.y === b.y &&
         driveway.x === a.x &&
-        driveway.y === a.y)
+        driveway.y === a.y))
     );
   });
 
 const isBusinessParkDrivewayEdge = (a: Cell, b: Cell): boolean =>
   businessParks.some((bp) => {
-    const [p0, p1] = bp.startPath?.points ?? [];
+    const [p0, p1] = businessParkDrivewayPoints(bp);
     return (
       p0 &&
       p1 &&
@@ -100,6 +110,12 @@ export const cellIsObstructed = (
   if (reservedAreas.some((p) => p.x === x && p.y === y)) return true;
   if (businessParks.some((bp) => bp.points.some((p) => p.x === x && p.y === y)))
     return true;
+  if (
+    businessParks.some((bp) =>
+      businessParkDrivewayPoints(bp).some((p) => p.x === x && p.y === y),
+    )
+  )
+    return true;
   if (landmarks.some((p) => p.x === x && p.y === y)) return true;
   if (
     streets.some(
@@ -111,9 +127,8 @@ export const cellIsObstructed = (
     return true;
   if (houses.some((house) => house.x === x && house.y === y)) return true;
   if (
-    houses.some(
-      (house) =>
-        house.x + house.facing.x === x && house.y + house.facing.y === y,
+    houses.some((house) =>
+      house.startPath?.points.some((point) => point.x === x && point.y === y),
     )
   )
     return true;

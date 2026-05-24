@@ -6,6 +6,7 @@ import { resetViewBox, svgElement } from "../gfx/svg";
 import { createElement, createSvgElement } from "../gfx/svg-utils";
 import { session, streets } from "../state";
 import type { Pixel } from "../types";
+import { closeHomeActions } from "./home-actions";
 import { menuBackground } from "./menu";
 import {
   gridToggleButton,
@@ -241,6 +242,7 @@ export const showGameover = (): void => {
   const score = session.pickups;
   uiContainer.style.zIndex = "";
   setHelpButtonVisible(false);
+  closeHomeActions();
 
   if (score > Number(localStorage.getItem("Lando Curb"))) {
     localStorage.setItem("Lando Curb", String(score));

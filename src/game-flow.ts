@@ -2,6 +2,11 @@ import type { GameLoop } from "kontra";
 
 import { fadeOutGameMusic, playGameOverSound, startGameMusic } from "./audio";
 import { board, grid, resetBoard } from "./board";
+import {
+  applyChallengeStartRules,
+  challengeStartModeSelected,
+  clearActiveChallenges,
+} from "./challenge";
 import { svgPxToDisplayPx } from "./gfx/coords";
 import { clearLayers } from "./gfx/layers";
 import { resetViewBox } from "./gfx/svg";
@@ -22,7 +27,13 @@ import {
   showGameoverMapControls,
   transitionGameoverToMenu,
 } from "./ui/gameover";
-import { hideMenu, initMenu, initMenuBackground, showMenu } from "./ui/menu";
+import {
+  hideMenu,
+  initMenu,
+  initMenuBackground,
+  showChallengeStartPicker,
+  showMenu,
+} from "./ui/menu";
 import {
   hideGameHud,
   resetDeveloperMode,
@@ -39,6 +50,7 @@ export const gameState = {
   updateCount: 0,
   totalUpdateCount: 0,
   renderCount: 0,
+  paused: false,
   gameOverlayHidden: false,
   lostBusinessParkPosition: { x: 0, y: 0 } as Pixel,
   currentMap: generateRandomMap,
@@ -57,6 +69,7 @@ const startGame = (): void => {
   if (!gameState.gameStarted) {
     resetHudCounters();
     hideMenu();
+    gameState.paused = false;
     gameState.gameStarted = true;
     gameState.updateCount = 1;
     gameState.totalUpdateCount = 1;
@@ -67,14 +80,39 @@ const startGame = (): void => {
 
 const selectMap = (map: MapGenerator): void => {
   gameState.currentMap = map;
+
+  if (challengeStartModeSelected()) {
+    clearActiveChallenges();
+    hideMenu();
+    loop.stop();
+    showChallengeStartPicker({
+      onCancel: returnToMenu,
+      onStart: () => {
+        resetState();
+        resetDeveloperMode();
+        initDemandBudgets();
+        resetDemandBudgets();
+        resetSpawning();
+        clearLayers();
+        applyChallengeStartRules();
+        gameState.currentMap(0);
+        startGame();
+        loop.start();
+      },
+    });
+    return;
+  }
+
   // Clear the preloaded random map and regenerate with chosen map
   resetState();
+  clearActiveChallenges();
   resetDeveloperMode();
   initDemandBudgets();
   resetDemandBudgets();
   resetSpawning();
   clearLayers();
   gameState.currentMap(0);
+  applyChallengeStartRules();
   startGame();
 };
 
@@ -87,6 +125,7 @@ const startNewGame = (): void => {
 
     setTimeout(() => {
       resetState();
+      applyChallengeStartRules();
       resetDeveloperMode();
       initDemandBudgets();
       resetDemandBudgets();
@@ -95,6 +134,7 @@ const startNewGame = (): void => {
       gameState.updateCount = 1;
       gameState.totalUpdateCount = 1;
       gameState.renderCount = 1;
+      gameState.paused = false;
       resetHudCounters();
       resetUpgrades();
       resetBoard();
@@ -113,8 +153,46 @@ const startNewGame = (): void => {
   }
 };
 
+export const restartCurrentRun = (): void => {
+  loop.stop();
+  gameState.gameStarted = true;
+  gameState.paused = false;
+  prepareRestart();
+
+  setTimeout(() => {
+    resetState();
+    applyChallengeStartRules();
+    resetDeveloperMode();
+    initDemandBudgets();
+    resetDemandBudgets();
+    resetSpawning();
+    setMotorwayMode(false);
+    resetDeleteMode();
+    gameState.updateCount = 1;
+    gameState.totalUpdateCount = 1;
+    gameState.renderCount = 1;
+    gameState.paused = false;
+    gameState.gameOverlayHidden = false;
+    resetHudCounters();
+    resetUpgrades();
+    resetBoard();
+    resetViewBox();
+    clearLayers();
+    hideGameover();
+    setHelpButtonVisible(true);
+    clearLostFocus();
+
+    setTimeout(() => {
+      gameState.currentMap(0);
+      startGameMusic();
+      loop.start();
+    }, 1000);
+  }, 1000);
+};
+
 const gameoverToMenu = (): void => {
   gameState.gameStarted = false;
+  gameState.paused = false;
   transitionGameoverToMenu(session.paths, () => {
     resetState();
     resetDeveloperMode();
@@ -124,6 +202,7 @@ const gameoverToMenu = (): void => {
     gameState.updateCount = 0;
     gameState.totalUpdateCount = 0;
     gameState.renderCount = 0;
+    gameState.paused = false;
     resetUpgrades();
 
     setTimeout(() => {
@@ -136,6 +215,7 @@ const gameoverToMenu = (): void => {
 
 export const returnToMenu = (): void => {
   gameState.gameStarted = false;
+  gameState.paused = false;
   gameState.gameOverlayHidden = false;
   loop.stop();
   fadeOutGameMusic();
@@ -153,6 +233,7 @@ export const returnToMenu = (): void => {
   gameState.updateCount = 0;
   gameState.totalUpdateCount = 0;
   gameState.renderCount = 0;
+  gameState.paused = false;
   resetHudCounters();
   resetUpgrades();
   resetBoard();
@@ -191,6 +272,7 @@ export const checkGameOver = (): void => {
   for (const f of businessParks) {
     if (!f.isAlive()) {
       gameState.gameStarted = false;
+      gameState.paused = false;
       loop.stop();
       fadeOutGameMusic();
       playGameOverSound();
@@ -207,6 +289,7 @@ export const checkGameOver = (): void => {
       gameState.updateCount = 0;
       gameState.totalUpdateCount = 0;
       gameState.renderCount = 0;
+      gameState.paused = false;
 
       showGameover();
       return;

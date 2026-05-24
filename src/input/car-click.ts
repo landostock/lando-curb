@@ -1,4 +1,6 @@
+import { challengeDisablesPausedInteraction } from "../challenge";
 import type { Commuter } from "../entities/commuter";
+import { gameState } from "../game-flow";
 import { gridPointerLayer, pinLayer } from "../gfx/layers";
 import { svgElement } from "../gfx/svg";
 import { createSvgElement } from "../gfx/svg-utils";
@@ -107,6 +109,7 @@ const showIndicator = (
 
 export const initCarClick = (): void => {
   gridPointerLayer.addEventListener("dblclick", (event) => {
+    if (challengeDisablesPausedInteraction() && gameState.paused) return;
     const coords = toSvgCoords(event);
     if (!coords) return;
 

@@ -18,11 +18,13 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 const smoothstep = (value: number): number => value * value * (3 - 2 * value);
 
 const currentMotorwayBoost = (c: Commuter): number => {
-  if (!c.lastTraversed || !c.route[0]) return 1;
-  if (!edgeIsMotorway(c.lastTraversed, c.route[0])) return 1;
+  const edgeStart = c.lastTraversed ?? c.route[0];
+  const edgeEnd = c.lastTraversed ? c.route[0] : c.route[1];
+  if (!edgeStart || !edgeEnd) return 1;
+  if (!edgeIsMotorway(edgeStart, edgeEnd)) return 1;
 
-  const start = toSvgPoint(c.lastTraversed);
-  const end = toSvgPoint(c.route[0]);
+  const start = toSvgPoint(edgeStart);
+  const end = toSvgPoint(edgeEnd);
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const len2 = dx * dx + dy * dy;
@@ -35,8 +37,8 @@ const currentMotorwayBoost = (c: Commuter): number => {
   const rampOut = smoothstep(clamp01((1 - progress) / ramp));
   const visualRamp = Math.min(rampIn, rampOut);
   const cellDistance = Math.hypot(
-    c.route[0].x - c.lastTraversed.x,
-    c.route[0].y - c.lastTraversed.y,
+    edgeEnd.x - edgeStart.x,
+    edgeEnd.y - edgeStart.y,
   );
   const targetBoost = MOTORWAY_SPEED_MULTIPLIER * cellDistance;
 

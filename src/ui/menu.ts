@@ -1,7 +1,20 @@
 import { board, grid } from "../board";
+import {
+  activeChallengeIds,
+  canCombineChallenge,
+  type ChallengeDefinition,
+  clearActiveChallenges,
+  getChallengeIconPath,
+  type RuleChallengeId,
+  ruleChallenges,
+  selectedStartMode,
+  setActiveChallenges,
+  setSelectedStartMode,
+} from "../challenge";
+import { colors } from "../gfx/colors";
 import { svgPxToDisplayPx } from "../gfx/coords";
 import { svgElement } from "../gfx/svg";
-import { createElement } from "../gfx/svg-utils";
+import { createElement, createSvgElement } from "../gfx/svg-utils";
 import {
   generateBerlinMap,
   generateOstholsteinMap,
@@ -49,6 +62,403 @@ const berlinButtonWrapper = createElement();
 const berlinButton = createElement("button");
 const ostholsteinButtonWrapper = createElement();
 const ostholsteinButton = createElement("button");
+const modeButtons = createElement();
+const zenModeButton = createElement("button");
+const challengeModeButton = createElement("button");
+const challengeOverlay = createElement();
+const challengePanel = createElement();
+const challengeTitle = createElement();
+const challengeCopy = createElement();
+const challengeOptionsGrid = createElement();
+const challengeCloseButton = createElement("button");
+const challengeStartButton = createElement("button");
+const modeHint = createElement();
+const challengeCards = new Map<RuleChallengeId, HTMLButtonElement>();
+
+let challengePickerOpen = false;
+let challengeStartAction: (() => void) | undefined;
+let challengeCancelAction: (() => void) | undefined;
+let pendingChallengeIds = new Set<RuleChallengeId>();
+
+const updateChallengeButtons = (): void => {
+  const challengeModeSelected =
+    selectedStartMode === "challenge" || challengePickerOpen;
+  zenModeButton.setAttribute(
+    "aria-pressed",
+    challengeModeSelected ? "false" : "true",
+  );
+  challengeModeButton.setAttribute(
+    "aria-pressed",
+    challengeModeSelected ? "true" : "false",
+  );
+
+  zenModeButton.style.background = challengeModeSelected ? "#fff" : "#443";
+  zenModeButton.style.color = challengeModeSelected ? "#443" : "#fff";
+  zenModeButton.style.boxShadow = challengeModeSelected
+    ? "0 5px 12px #0000000f"
+    : "0 0 0 2px #fff, 0 8px 18px #4434";
+  challengeModeButton.style.background = challengeModeSelected ? "#443" : "#fff";
+  challengeModeButton.style.color = challengeModeSelected ? "#fff" : "#443";
+  challengeModeButton.style.boxShadow = challengeModeSelected
+    ? "0 0 0 2px #fff, 0 8px 18px #4434"
+    : "0 5px 12px #0000000f";
+
+  for (const [id, button] of challengeCards) {
+    const selected = pendingChallengeIds.has(id);
+    const accent = button.dataset.accent ?? "#443";
+    const compatible = selected || canCombineChallenge(id, pendingChallengeIds);
+    button.style.background = selected
+      ? `linear-gradient(90deg, ${accent} 0, ${accent} 8px, #fffdf8 8px)`
+      : "#fff";
+    button.style.color = "#443";
+    button.style.borderColor = selected ? accent : "rgba(68,68,51,.12)";
+    button.style.boxShadow = selected
+      ? `0 0 0 2px #fff, 0 14px 30px ${accent}2e`
+      : "0 5px 12px #0000000f";
+    button.style.transform = selected ? "translateY(-2px)" : "";
+    button.style.opacity = compatible ? "1" : ".42";
+    button.style.pointerEvents = compatible ? "all" : "none";
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.setAttribute("aria-disabled", compatible ? "false" : "true");
+  }
+
+  const canStart = pendingChallengeIds.size > 0;
+  challengeStartButton.style.opacity = canStart ? "1" : ".42";
+  challengeStartButton.style.pointerEvents = canStart ? "all" : "none";
+};
+
+const setChallengePickerOpen = (open: boolean): void => {
+  if (challengePickerOpen === open) {
+    updateChallengeButtons();
+    return;
+  }
+  challengePickerOpen = open;
+  challengeOverlay.style.opacity = open ? "1" : "0";
+  challengeOverlay.style.visibility = open ? "visible" : "hidden";
+  challengeOverlay.style.pointerEvents = open ? "all" : "none";
+  challengeOverlay.style.transition = open
+    ? "opacity .28s ease"
+    : "opacity .28s ease, visibility 0s linear .28s";
+  challengePanel.style.transform = open
+    ? "translateY(0) scale(1)"
+    : "translateY(12px) scale(.98)";
+  updateChallengeButtons();
+};
+
+const hideModeHint = (): void => {
+  modeHint.style.opacity = "0";
+  modeHint.style.transform = "translateY(-4px)";
+};
+
+const showModeHint = (copy: string): void => {
+  modeHint.innerText = copy;
+  modeHint.style.opacity = "1";
+  modeHint.style.transform = "translateY(0)";
+};
+
+const createModeInfo = (copy: string): HTMLElement => {
+  const info = createElement();
+  info.innerText = "?";
+  info.title = copy;
+  info.setAttribute("aria-label", copy);
+  info.setAttribute("role", "button");
+  info.setAttribute("tabindex", "0");
+  info.style.cssText = `
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: rgba(68,68,51,.1);
+    color: currentColor;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1;
+    cursor: help;
+  `;
+  const openHint = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    showModeHint(copy);
+  };
+  info.addEventListener("click", openHint);
+  info.addEventListener("keydown", (event) => {
+    const keyEvent = event as KeyboardEvent;
+    if (keyEvent.key !== "Enter" && keyEvent.key !== " ") return;
+    openHint(event);
+  });
+  return info;
+};
+
+const createChallengeCard = (
+  challenge: ChallengeDefinition & { id: RuleChallengeId },
+): HTMLButtonElement => {
+  const button = createElement("button");
+  button.style.cssText = `
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    height: auto;
+    min-height: 94px;
+    padding: 13px 15px;
+    border-radius: 14px;
+    border: 2px solid ${challenge.accent};
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: transform .18s, background .18s, color .18s, box-shadow .18s;
+  `;
+  button.dataset.accent = challenge.accent;
+
+  const iconFrame = createElement();
+  iconFrame.style.cssText = `
+    display:grid;
+    place-items:center;
+    width:56px;
+    height:56px;
+    border-radius:17px;
+    background:#f7f7f0;
+    box-shadow:inset 0 0 0 1px rgba(68,68,51,.08);
+  `;
+  const iconSvg = createSvgElement("svg");
+  iconSvg.setAttribute("viewBox", "0 0 24 24");
+  iconSvg.setAttribute("width", "40");
+  iconSvg.setAttribute("height", "40");
+  const iconPath = createSvgElement("path");
+  iconPath.setAttribute("d", getChallengeIconPath(challenge.id));
+  iconPath.setAttribute("fill", "none");
+  iconPath.setAttribute("stroke", colors.ui);
+  iconPath.setAttribute("stroke-width", "2");
+  iconPath.setAttribute("stroke-linecap", "round");
+  iconPath.setAttribute("stroke-linejoin", "round");
+  iconSvg.append(iconPath);
+  iconFrame.append(iconSvg);
+
+  const title = createElement();
+  title.innerText = challenge.title;
+  title.style.cssText = `
+    font-size:16px;
+    line-height:1.05;
+    margin-bottom:5px;
+  `;
+  const copy = createElement();
+  copy.innerText = challenge.description;
+  copy.style.cssText = `
+    max-width: 100%;
+    font-size:12px;
+    line-height:1.32;
+    font-weight:700;
+    opacity:.74;
+  `;
+
+  button.setAttribute("aria-label", challenge.title);
+  const textBlock = createElement();
+  textBlock.style.cssText = `
+    min-width:0;
+    align-self:center;
+  `;
+  textBlock.append(title, copy);
+  button.append(iconFrame, textBlock);
+  button.addEventListener("click", () => {
+    if (pendingChallengeIds.has(challenge.id)) {
+      pendingChallengeIds.delete(challenge.id);
+    } else if (canCombineChallenge(challenge.id, pendingChallengeIds)) {
+      pendingChallengeIds.add(challenge.id);
+    }
+    updateChallengeButtons();
+  });
+  challengeCards.set(challenge.id, button);
+  return button;
+};
+
+const initChallengeModeControls = (): void => {
+  modeButtons.style.cssText = `
+    display: grid;
+    grid-template-columns: repeat(2, minmax(150px, 230px));
+    gap: 12px;
+    margin-top: 32px;
+    opacity: 0;
+  `;
+
+  const modeButtonCss = `
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 54px;
+    padding: 0 14px 0 17px;
+    border-radius: 12px;
+    border: 2px solid #443;
+    font: inherit;
+    font-size: 18px;
+    cursor: pointer;
+    transition: transform .18s, background .18s, color .18s, box-shadow .18s;
+  `;
+  zenModeButton.style.cssText = modeButtonCss;
+  challengeModeButton.style.cssText = modeButtonCss;
+  zenModeButton.append(
+    document.createTextNode("Zen Mode"),
+    createModeInfo("Classic play with full controls."),
+  );
+  challengeModeButton.append(
+    document.createTextNode("Challenge Mode"),
+    createModeInfo(
+      "Pick a map first, then combine challenge rules before the run begins.",
+    ),
+  );
+  zenModeButton.addEventListener("click", () => {
+    setSelectedStartMode("zen");
+    setChallengePickerOpen(false);
+    hideModeHint();
+    updateChallengeButtons();
+  });
+  challengeModeButton.addEventListener("click", () => {
+    setSelectedStartMode("challenge");
+    hideModeHint();
+    updateChallengeButtons();
+  });
+  modeHint.style.cssText = `
+    grid-column: 1 / -1;
+    min-height: 18px;
+    max-width: 440px;
+    font-size: 12px;
+    line-height: 1.25;
+    font-weight: 750;
+    color: rgba(68,68,51,.72);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity .16s ease, transform .16s ease;
+  `;
+  modeButtons.append(zenModeButton, challengeModeButton, modeHint);
+
+  challengeOverlay.style.cssText = `
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background: rgba(31, 38, 24, .32);
+    backdrop-filter: blur(8px) saturate(1.08);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .28s ease, visibility 0s linear .28s;
+    z-index: 4;
+  `;
+  challengePanel.style.cssText = `
+    position: relative;
+    width: min(820px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 26px 28px 30px;
+    border-radius: 20px;
+    background: #eef3e4;
+    color: ${colors.ui};
+    box-shadow:
+      0 24px 80px rgba(20, 24, 16, .28),
+      inset 0 0 0 1px rgba(68, 68, 51, .1);
+    transform: translateY(12px) scale(.98);
+    transition: transform .28s cubic-bezier(.2, 1.4, .35, 1);
+  `;
+
+  challengeCloseButton.style.cssText = `
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: 50%;
+    background: #fff;
+    color: ${colors.ui};
+    font-size: 22px;
+    pointer-events: all;
+  `;
+  challengeCloseButton.innerText = "×";
+  challengeCloseButton.setAttribute("aria-label", "Close challenge picker");
+  challengeCloseButton.addEventListener("click", () => {
+    setChallengePickerOpen(false);
+    challengeCancelAction?.();
+  });
+
+  challengeTitle.style.cssText = `
+    margin: 0;
+    padding-right: 52px;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: 0;
+  `;
+  challengeTitle.innerText = "Select Challenges";
+  challengeCopy.style.cssText = `
+    margin-top: 10px;
+    max-width: 560px;
+    font-size: 14px;
+    line-height: 1.45;
+  `;
+  challengeCopy.innerText =
+    "Combine any compatible rules, then start.";
+
+  challengeOptionsGrid.style.cssText = `
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  `;
+  challengeOptionsGrid.append(
+    ...ruleChallenges.map(createChallengeCard),
+  );
+  challengeStartButton.style.cssText = `
+    display: inline-grid;
+    place-items: center;
+    height: 44px;
+    margin-top: 16px;
+    padding: 0 19px;
+    border-radius: 12px;
+    background: ${colors.ui};
+    color: #fff;
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+    transition: opacity .16s ease, transform .16s ease, box-shadow .16s ease;
+    box-shadow: 0 10px 24px rgba(20,24,16,.16);
+  `;
+  challengeStartButton.innerText = "Start Game";
+  challengeStartButton.addEventListener("click", () => {
+    if (!pendingChallengeIds.size) return;
+    setActiveChallenges([...pendingChallengeIds]);
+    setChallengePickerOpen(false);
+    challengeStartAction?.();
+  });
+  challengePanel.append(
+    challengeCloseButton,
+    challengeTitle,
+    challengeCopy,
+    challengeOptionsGrid,
+    challengeStartButton,
+  );
+  challengeOverlay.append(challengePanel);
+  document.body.append(challengeOverlay);
+  updateChallengeButtons();
+};
+
+export const showChallengeStartPicker = ({
+  onCancel,
+  onStart,
+}: {
+  onCancel: () => void;
+  onStart: () => void;
+}): void => {
+  pendingChallengeIds = new Set(activeChallengeIds);
+  clearActiveChallenges();
+  challengeStartAction = onStart;
+  challengeCancelAction = onCancel;
+  setChallengePickerOpen(true);
+};
 
 export const initMenu = (
   startWithMap: (map: (delay: number) => void) => void,
@@ -73,14 +483,16 @@ export const initMenu = (
 
   const buttonCss = `
     display: flex; align-items: center; gap: 14px;
-    font: inherit; font-size: 22px;
-    padding: 12px 20px; border: 2px solid #333; border-radius: 10px;
+    font: inherit; font-size: 20px;
+    padding: 10px 18px; border: 2px solid #333; border-radius: 10px;
     background: #fff; cursor: pointer;
     transition: transform .15s, background .15s;
   `;
   startButton.style.cssText = buttonCss;
   berlinButton.style.cssText = buttonCss;
   ostholsteinButton.style.cssText = buttonCss;
+
+  initChallengeModeControls();
 
   // Dice — random map
   startButton.innerHTML = `
@@ -132,7 +544,7 @@ export const initMenu = (
   );
   ostholsteinButtonWrapper.style.opacity = "0";
 
-  menuButtons.style.cssText = `display: grid; gap: 12px; margin-top: 48px;`;
+  menuButtons.style.cssText = `display: grid; gap: 12px; margin-top: 34px;`;
   startButtonWrapper.append(startButton);
   berlinButtonWrapper.append(berlinButton);
   ostholsteinButtonWrapper.append(ostholsteinButton);
@@ -143,7 +555,13 @@ export const initMenu = (
     ostholsteinButtonWrapper,
   );
 
-  menuWrapper.append(menuLogo, menuHeader, menuButtons, menuText1);
+  menuWrapper.append(
+    menuLogo,
+    menuHeader,
+    modeButtons,
+    menuButtons,
+    menuText1,
+  );
 
   document.body.append(menuWrapper);
 };
@@ -155,13 +573,15 @@ export const showMenu = (
   menuBackground.style.display = "";
   if (!menuWrapper.isConnected) document.body.append(menuWrapper);
   menuWrapper.style.pointerEvents = "none";
+  updateChallengeButtons();
   menuBackground.style.clipPath = `polygon(0 0, calc(20dvw + 400px) 0, calc(20dvw + 350px) 100%, 0 100%)`;
   menuBackground.style.transition = `clip-path 1s, opacity 2s`;
   menuLogo.style.transition = `opacity .5s .8s`;
   menuHeader.style.transition = `opacity .5s 1s`;
-  startButtonWrapper.style.transition = `opacity .5s 1.2s`;
-  berlinButtonWrapper.style.transition = `opacity .5s 1.3s`;
-  ostholsteinButtonWrapper.style.transition = `opacity .5s 1.4s`;
+  modeButtons.style.transition = `opacity .5s 1.12s`;
+  startButtonWrapper.style.transition = `opacity .5s 1.28s`;
+  berlinButtonWrapper.style.transition = `opacity .5s 1.38s`;
+  ostholsteinButtonWrapper.style.transition = `opacity .5s 1.48s`;
   menuText1.style.transition = `opacity .5s 1.6s`;
 
   // Buttons become interactive once fully visible (last fades in at 0.5s + 1.4s delay).
@@ -175,9 +595,10 @@ export const showMenu = (
     menuBackground.style.transition = `opacity 0s`;
     menuLogo.style.transition = `opacity .5s .2s`;
     menuHeader.style.transition = `opacity .5s .4s`;
-    startButtonWrapper.style.transition = `opacity .5s .6s`;
-    berlinButtonWrapper.style.transition = `opacity .5s .7s`;
-    ostholsteinButtonWrapper.style.transition = `opacity .5s .8s`;
+    modeButtons.style.transition = `opacity .5s .55s`;
+    startButtonWrapper.style.transition = `opacity .5s .72s`;
+    berlinButtonWrapper.style.transition = `opacity .5s .82s`;
+    ostholsteinButtonWrapper.style.transition = `opacity .5s .92s`;
     menuText1.style.transition = `opacity .5s 1s`;
     clearTimeout(pointerEventsTimer);
     pointerEventsTimer = setTimeout(() => {
@@ -202,6 +623,7 @@ export const showMenu = (
   menuBackground.style.opacity = "1";
   menuLogo.style.opacity = "1";
   menuHeader.style.opacity = "1";
+  modeButtons.style.opacity = "1";
   menuText1.style.opacity = "1";
   startButtonWrapper.style.opacity = "1";
   berlinButtonWrapper.style.opacity = "1";
@@ -221,6 +643,7 @@ export const hideMenu = (): void => {
   menuBackground.style.transition = `opacity 1s .6s`;
   menuLogo.style.transition = `opacity .3s .45s`;
   menuHeader.style.transition = `opacity .3s .4s`;
+  modeButtons.style.transition = `opacity .3s .32s`;
   startButtonWrapper.style.transition = `opacity .3s .2s`;
   berlinButtonWrapper.style.transition = `opacity .3s .15s`;
   ostholsteinButtonWrapper.style.transition = `opacity .3s .1s`;
@@ -233,6 +656,8 @@ export const hideMenu = (): void => {
   ostholsteinButtonWrapper.style.opacity = "0";
   menuText1.style.opacity = "0";
   menuHeader.style.opacity = "0";
+  modeButtons.style.opacity = "0";
+  setChallengePickerOpen(false);
 
   // Remove from DOM once fully invisible so backdrop-filter doesn't create
   // a stacking context that interferes with game element z-ordering.

@@ -1,3 +1,11 @@
+import {
+  type ChallengeDefinition,
+  challengeDisablesDelete,
+  challengeForcedSpeed,
+  getActiveChallengeDefinitions,
+  getChallengeIconPath,
+  type RuleChallengeId,
+} from "../challenge";
 import { colors } from "../gfx/colors";
 import { createElement, createSvgElement } from "../gfx/svg-utils";
 import { lakes, session } from "../state";
@@ -27,6 +35,7 @@ export const bridgeIndicatorCount = createElement();
 
 export const homeActionIndicator = createElement("button");
 export const homeActionIndicatorCount = createElement();
+export const challengeHud = createElement();
 
 export const developerModeButton = createElement("button");
 export let developerMode = false;
@@ -39,6 +48,68 @@ let developerModeAccessGranted = false;
 const updateHomeActionPosition = (): void => {
   const bridgeSlotVisible = lakes.length > 0 || session.bridges > 0;
   homeActionIndicator.style.bottom = bridgeSlotVisible ? "308px" : "212px";
+};
+
+type ActiveRuleChallenge = ChallengeDefinition & { id: RuleChallengeId };
+
+const getActiveRuleChallenges = (): ActiveRuleChallenge[] =>
+  getActiveChallengeDefinitions().filter(
+    (challenge): challenge is ActiveRuleChallenge => challenge.id !== "zen",
+  );
+
+export const setChallengeHudVisible = (visible: boolean): void => {
+  const show = visible && challengeHud.childElementCount > 0;
+  challengeHud.style.opacity = show ? "1" : "0";
+  challengeHud.style.pointerEvents = show ? "all" : "none";
+  challengeHud.setAttribute("aria-hidden", show ? "false" : "true");
+};
+
+const createChallengeHudItem = (challenge: ActiveRuleChallenge): HTMLElement => {
+  const item = createElement();
+  item.className = "challenge-hud-item";
+  item.title = `${challenge.title}: ${challenge.description}`;
+  item.setAttribute("aria-label", item.title);
+  item.setAttribute("role", "img");
+  item.setAttribute("tabindex", "0");
+  item.style.setProperty("--challenge-accent", challenge.accent);
+  item.style.borderColor = `${challenge.accent}55`;
+
+  const iconSvg = createSvgElement("svg");
+  iconSvg.setAttribute("viewBox", "0 0 24 24");
+  iconSvg.setAttribute("aria-hidden", "true");
+  iconSvg.style.width = "27px";
+  iconSvg.style.height = "27px";
+  const iconPath = createSvgElement("path");
+  iconPath.setAttribute("d", getChallengeIconPath(challenge.id));
+  iconPath.setAttribute("fill", "none");
+  iconPath.setAttribute("stroke", challenge.accent);
+  iconPath.setAttribute("stroke-width", "2.2");
+  iconPath.setAttribute("stroke-linecap", "round");
+  iconPath.setAttribute("stroke-linejoin", "round");
+  iconSvg.append(iconPath);
+
+  const tooltip = createElement();
+  tooltip.className = "challenge-hud-tooltip";
+  tooltip.style.borderLeftColor = challenge.accent;
+
+  const title = createElement();
+  title.className = "challenge-hud-tooltip-title";
+  title.innerText = challenge.shortTitle;
+
+  const copy = createElement();
+  copy.className = "challenge-hud-tooltip-copy";
+  copy.innerText = challenge.description;
+
+  tooltip.append(title, copy);
+  item.append(iconSvg, tooltip);
+  return item;
+};
+
+const renderChallengeHud = (): void => {
+  challengeHud.replaceChildren(
+    ...getActiveRuleChallenges().map(createChallengeHudItem),
+  );
+  setChallengeHudVisible(false);
 };
 
 export const updateInventoryCounters = (): void => {
@@ -150,6 +221,8 @@ export const setGameSpeed = (speed: GameSpeed): GameSpeed => {
 };
 
 export const cycleGameSpeed = (): GameSpeed => {
+  const forced = challengeForcedSpeed();
+  if (forced) return setGameSpeed(forced);
   return setGameSpeed(gameSpeed === 1 ? 2 : gameSpeed === 2 ? 3 : 1);
 };
 
@@ -262,10 +335,11 @@ export const setAudioModeButton = (mode: AudioMode): void => {
 
 export const setGameplayControlsVisible = (visible: boolean): void => {
   gameplayControlsVisible = visible;
+  const deleteVisible = visible && !challengeDisablesDelete();
   gridToggleButton.style.opacity = visible ? "1" : "0";
   gridToggleButton.style.pointerEvents = visible ? "all" : "none";
-  gridRedToggleButton.style.opacity = visible ? "1" : "0";
-  gridRedToggleButton.style.pointerEvents = visible ? "all" : "none";
+  gridRedToggleButton.style.opacity = deleteVisible ? "1" : "0";
+  gridRedToggleButton.style.pointerEvents = deleteVisible ? "all" : "none";
   gridRedToggleTooltip.style.pointerEvents = "none";
   audioModeButton.style.opacity = visible ? "1" : "0";
   audioModeButton.style.pointerEvents = visible ? "all" : "none";
@@ -382,6 +456,117 @@ export const initUi = () => {
       font-size: 15px;
       font-weight: 800;
     }
+    .challenge-hud {
+      position: absolute;
+      top: 74px;
+      left: 16px;
+      display: grid;
+      gap: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .32s ease;
+      z-index: 6;
+    }
+    .challenge-hud-item {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      box-sizing: border-box;
+      border: 2px solid rgba(68,68,51,.16);
+      border-radius: 15px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.96), rgba(247,247,240,.9));
+      box-shadow:
+        0 8px 24px rgba(0,0,0,.08),
+        inset 0 0 0 1px rgba(255,255,255,.72);
+      cursor: help;
+      outline: none;
+      pointer-events: all;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+    .challenge-hud-item::after {
+      content: "";
+      position: absolute;
+      left: 5px;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      border-radius: 99px;
+      background: var(--challenge-accent);
+      opacity: .86;
+    }
+    .challenge-hud-item:hover,
+    .challenge-hud-item:focus-visible {
+      transform: translateX(2px) scale(1.04);
+      box-shadow:
+        0 12px 30px rgba(0,0,0,.12),
+        inset 0 0 0 1px rgba(255,255,255,.86);
+    }
+    .challenge-hud-tooltip {
+      position: absolute;
+      top: 50%;
+      left: 50px;
+      width: 172px;
+      box-sizing: border-box;
+      padding: 10px 12px 11px;
+      border-left: 4px solid currentColor;
+      border-radius: 12px;
+      background: rgba(68,68,51,.96);
+      color: #fff;
+      box-shadow: 0 14px 36px rgba(0,0,0,.18);
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-6px, -50%) scale(.98);
+      transition: opacity .16s ease, transform .16s ease;
+    }
+    .challenge-hud-tooltip::before {
+      content: "";
+      position: absolute;
+      top: calc(50% - 6px);
+      left: -10px;
+      width: 0;
+      height: 0;
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-right: 6px solid rgba(68,68,51,.96);
+    }
+    .challenge-hud-item:hover .challenge-hud-tooltip,
+    .challenge-hud-item:focus-visible .challenge-hud-tooltip {
+      opacity: 1;
+      transform: translate(0, -50%) scale(1);
+    }
+    .challenge-hud-tooltip-title {
+      font-size: 14px;
+      line-height: 1.05;
+      letter-spacing: 0;
+      margin-bottom: 4px;
+    }
+    .challenge-hud-tooltip-copy {
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.2;
+      opacity: .76;
+    }
+    @media (max-height: 560px) {
+      .challenge-hud {
+        top: 68px;
+        gap: 6px;
+      }
+      .challenge-hud-item {
+        width: 38px;
+        height: 38px;
+        border-radius: 13px;
+      }
+      .challenge-hud-item svg {
+        width: 24px !important;
+        height: 24px !important;
+      }
+      .challenge-hud-tooltip {
+        left: 46px;
+      }
+    }
   `;
   document.head.append(styles);
 
@@ -425,6 +610,9 @@ export const initUi = () => {
 
   pickupCount.innerText = "0";
   scoreCounters.append(pinSvg, pickupCount);
+
+  challengeHud.className = "challenge-hud";
+  challengeHud.setAttribute("aria-hidden", "true");
 
   clock.style.cssText = `
     position: absolute;
@@ -858,9 +1046,12 @@ export const initUi = () => {
   `;
   helpShortcuts.innerHTML = `
     <span class="help-shortcut"><span class="help-kbd">Space</span><span>Pause</span></span>
+    <span class="help-shortcut"><span class="help-kbd">Esc</span><span>Menu</span></span>
     <span class="help-shortcut"><span class="help-kbd">G</span><span>Grid</span></span>
+    <span class="help-shortcut"><span class="help-kbd">D</span><span>Delete Mode</span></span>
     <span class="help-shortcut"><span class="help-kbd">M</span><span>Mute</span></span>
-    <span class="help-shortcut"><span class="help-kbd">S</span><span>New Song</span></span>
+    <span class="help-shortcut"><span class="help-kbd">N</span><span>Next Song</span></span>
+    <span class="help-shortcut"><span class="help-kbd">S</span><span>Swap Houses</span></span>
     <span class="help-shortcut"><span class="help-kbd">RMB</span><span>Remove road</span></span>
     <span class="help-shortcut"><span class="help-kbd">Red</span><span>Touch delete mode</span></span>
   `;
@@ -1054,6 +1245,7 @@ export const initUi = () => {
 
   uiContainer.append(
     scoreCounters,
+    challengeHud,
     clock,
     pauseButton,
     pathTilesIndicator,
@@ -1072,7 +1264,8 @@ export const initUi = () => {
 };
 
 export const resetHudCounters = (): void => {
-  setGameSpeed(1);
+  renderChallengeHud();
+  setGameSpeed(challengeForcedSpeed() ?? 1);
   updateInventoryCounters();
   pickupCount.innerText = "0";
   resetUpgradeCharge();
@@ -1081,6 +1274,7 @@ export const resetHudCounters = (): void => {
 export const hideGameHud = (): void => {
   scoreCounters.style.opacity = "0";
   scoreCounters.style.pointerEvents = "none";
+  setChallengeHudVisible(false);
   clock.style.opacity = "0";
   clock.style.pointerEvents = "none";
   pathTilesIndicator.style.opacity = "0";

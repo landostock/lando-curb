@@ -11,13 +11,14 @@ import {
   toSvgEdge,
 } from "../gfx/svg-utils";
 import { gridHide, gridShow } from "../input/grid-toggle";
+import { houseTypeChangesWouldMixColors } from "../logic/color-lock";
 import { commitStreetChanges } from "../logic/orchestrator";
 import {
   houseInCell,
   isAreaFree,
   streetWouldClipBuilding,
 } from "../logic/placement-obstacles";
-import { addHouse, session } from "../state";
+import { addHouse, session, trees } from "../state";
 import type { Cell, Direction, Rect } from "../types";
 import { inRect } from "../util/geometry";
 import {
@@ -36,6 +37,8 @@ const DIRECTIONS: Direction[] = [
   { x: 0, y: 1 } as Direction,
   { x: -1, y: 0 } as Direction,
 ];
+
+const TREE_CLEARANCE_RADIUS = 1;
 
 const shell = createElement();
 const panel = createElement();
@@ -56,6 +59,7 @@ let queuedSwap: [House, House] | null = null;
 let queuedMoveHouse: House | null = null;
 let readyCheckTimer: ReturnType<typeof setInterval> | undefined;
 let rebuildGridVisible = false;
+let suspendedForOverlay = false;
 let placement:
   | {
       cell: Cell;
@@ -118,6 +122,22 @@ const showPlacementMarker = (cell: Cell, valid: boolean): void => {
   placementMarker.setAttribute("stroke", valid ? colors.ui : colors.red);
   placementMarker.setAttribute("fill", valid ? "#ffffff44" : "#ff000014");
   placementMarker.style.display = "";
+};
+
+const cellDistance = (a: Cell, b: Cell): number =>
+  Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+const clearTreesForHousePlacement = (cell: Cell, facing: Direction): void => {
+  const driveway = { x: cell.x + facing.x, y: cell.y + facing.y } as Cell;
+  for (const tree of [...trees]) {
+    const treeCell = { x: tree.x, y: tree.y } as Cell;
+    if (
+      cellDistance(treeCell, cell) <= TREE_CLEARANCE_RADIUS ||
+      cellDistance(treeCell, driveway) <= TREE_CLEARANCE_RADIUS
+    ) {
+      tree.remove();
+    }
+  }
 };
 
 const consumeAction = (): void => {
@@ -187,6 +207,22 @@ const setPrimaryEnabled = (enabled: boolean): void => {
 
 const setPanelInteractive = (interactive: boolean): void => {
   panel.style.pointerEvents = interactive ? "all" : "none";
+};
+
+const showShell = (): void => {
+  shell.style.display = "block";
+  shell.style.opacity = "1";
+  shell.style.pointerEvents = "none";
+  setPanelInteractive(true);
+  setDeveloperModeButtonSuppressed(true);
+};
+
+const hideShell = (): void => {
+  shell.style.opacity = "0";
+  shell.style.pointerEvents = "none";
+  shell.style.display = "none";
+  setPanelInteractive(false);
+  setDeveloperModeButtonSuppressed(false);
 };
 
 const dockPanel = (docked: boolean): void => {
@@ -275,12 +311,10 @@ const renderSwap = (): void => {
   dockPanel(true);
   setTitle("Swap Houses", "M7 8h10M14 5l3 3-3 3M17 16H7M10 13l-3 3 3 3");
   body.replaceChildren();
-  primaryButton.innerText = "Confirm Swap";
-  primaryButton.style.display = "";
+  primaryButton.style.display = "none";
   secondaryButton.innerText = "Back";
   secondaryButton.style.display = "";
-  setPrimaryEnabled(false);
-  setStatus("Click any two houses. Busy houses will swap when their cars return.");
+  setStatus("Click two houses. The swap happens immediately when both are home.");
 };
 
 const renderMovePick = (): void => {
@@ -297,12 +331,10 @@ const renderMovePick = (): void => {
   dockPanel(true);
   setTitle("Move House", "M4 11 12 5l8 6M7 10v8h10v-8M10 18v-4h4v4");
   body.replaceChildren();
-  primaryButton.innerText = "Confirm Demolition";
-  primaryButton.style.display = "";
+  primaryButton.style.display = "none";
   secondaryButton.innerText = "Back";
   secondaryButton.style.display = "";
-  setPrimaryEnabled(false);
-  setStatus("Click any house. If cars are away, demolition waits for their return.");
+  setStatus("Click a house. Demolition starts when its cars are home.");
 };
 
 const candidateFacing = (cell: Cell): Direction | null => {
@@ -325,6 +357,7 @@ const candidateFacing = (cell: Cell): Direction | null => {
 };
 
 const renderMovePlace = (): void => {
+  showShell();
   mode = "movePlace";
   clearReadyCheck();
   clearMarks();
@@ -334,15 +367,26 @@ const renderMovePlace = (): void => {
   dockPanel(true);
   setTitle("Place House", "M5 12h14M12 5v14M7 9l5-4 5 4");
   body.replaceChildren();
-  primaryButton.innerText = "Build Here";
-  primaryButton.style.display = "";
+  primaryButton.style.display = "none";
   secondaryButton.innerText = "Undo Demolition";
   secondaryButton.style.display = "";
-  setPrimaryEnabled(false);
   setStatus("Click an open field with room for the new driveway.");
 };
 
+const swapWouldViolateColorLock = (a: House, b: House): boolean =>
+  houseTypeChangesWouldMixColors([
+    { house: a, type: b.type },
+    { house: b, type: a.type },
+  ]);
+
 const applySwap = (a: House, b: House): void => {
+  if (swapWouldViolateColorLock(a, b)) {
+    queuedSwap = null;
+    holdHouse(a, false);
+    holdHouse(b, false);
+    setStatus("Color Lock blocks that swap.");
+    return;
+  }
   holdHouse(a, false);
   holdHouse(b, false);
   a.lift();
@@ -362,6 +406,7 @@ const applySwap = (a: House, b: House): void => {
 const demolishHouse = (house: House): void => {
   queuedMoveHouse = null;
   holdHouse(house, false);
+  clearTreesForHousePlacement({ x: house.x, y: house.y } as Cell, house.facing);
   pendingMove = {
     type: house.type,
     style: house.style,
@@ -396,6 +441,10 @@ const waitForReady = (
 
 const restorePendingMove = (): void => {
   if (!pendingMove) return;
+  clearTreesForHousePlacement(
+    { x: pendingMove.original.x, y: pendingMove.original.y } as Cell,
+    pendingMove.original.facing,
+  );
   addHouse(
     new House({
       x: pendingMove.original.x,
@@ -421,24 +470,61 @@ const close = (): void => {
   hidePlacementMarker();
   dockPanel(false);
   mode = "closed";
-  shell.style.opacity = "0";
-  shell.style.pointerEvents = "none";
-  shell.style.display = "none";
-  setPanelInteractive(false);
-  setDeveloperModeButtonSuppressed(false);
+  hideShell();
+};
+
+const hideQueuedActionWindow = (): void => {
+  hideRebuildGrid();
+  hidePlacementMarker();
+  dockPanel(false);
+  mode = "closed";
+  hideShell();
+};
+
+export const suspendHomeActionsForOverlay = (): boolean => {
+  suspendedForOverlay = mode !== "closed";
+  if (!suspendedForOverlay) return false;
+  hideRebuildGrid();
+  hidePlacementMarker();
+  hideShell();
+  return true;
+};
+
+export const resumeHomeActionsAfterOverlay = (): void => {
+  if (!suspendedForOverlay) return;
+  suspendedForOverlay = false;
+  if (mode === "closed" || queuedSwap || queuedMoveHouse) return;
+  showShell();
+  if (mode !== "choose") dockPanel(true);
+  if (mode === "movePlace") {
+    showRebuildGrid();
+    if (placement) showPlacementMarker(placement.cell, true);
+  }
 };
 
 const open = (): void => {
+  if (queuedSwap || queuedMoveHouse) return;
   if (!canSpendHomeAction()) {
     flashUnavailable();
     return;
   }
-  shell.style.display = "block";
-  shell.style.opacity = "1";
-  shell.style.pointerEvents = "none";
-  setPanelInteractive(true);
-  setDeveloperModeButtonSuppressed(true);
+  showShell();
   renderChoose();
+};
+
+export const startHomeActionSwap = (): void => {
+  if (queuedSwap || queuedMoveHouse) return;
+  if (mode === "swap") {
+    close();
+    return;
+  }
+  if (mode !== "closed" && mode !== "choose") return;
+  if (!canSpendHomeAction()) {
+    flashUnavailable();
+    return;
+  }
+  showShell();
+  renderSwap();
 };
 
 const confirmSwap = (): void => {
@@ -447,6 +533,10 @@ const confirmSwap = (): void => {
   if (!a || !b) return;
   if (a.type === b.type) {
     setStatus("Pick two different house colors.");
+    return;
+  }
+  if (swapWouldViolateColorLock(a, b)) {
+    setStatus("Color Lock blocks that swap.");
     return;
   }
   if (queuedSwap) {
@@ -462,6 +552,7 @@ const confirmSwap = (): void => {
     "Swap queued. It will fire the moment both driveways are clear.",
     () => applySwap(a, b),
   );
+  hideQueuedActionWindow();
 };
 
 const confirmDemolition = (): void => {
@@ -481,10 +572,12 @@ const confirmDemolition = (): void => {
       if (queuedMoveHouse) demolishHouse(queuedMoveHouse);
     },
   );
+  hideQueuedActionWindow();
 };
 
 const confirmBuild = (): void => {
   if (!pendingMove || !placement) return;
+  clearTreesForHousePlacement(placement.cell, placement.facing);
   addHouse(
     new House({
       x: placement.cell.x,
@@ -531,12 +624,8 @@ export const handleHomeActionCellClick = (cell: Cell): boolean => {
       clearReadyCheck();
       releaseHeldHouses();
     }
-    setPrimaryEnabled(selectedHouses.length === 2);
-    setStatus(
-      selectedHouses.length === 2
-        ? "Ready to swap."
-        : "Click one more house.",
-    );
+    if (selectedHouses.length === 2) confirmSwap();
+    else setStatus("Click one more house.");
     return true;
   }
 
@@ -559,8 +648,7 @@ export const handleHomeActionCellClick = (cell: Cell): boolean => {
     moveHouse = house;
     markHouse(house, true);
     house.lift();
-    setPrimaryEnabled(true);
-    setStatus("Demolition is armed.");
+    confirmDemolition();
     return true;
   }
 
@@ -573,8 +661,7 @@ export const handleHomeActionCellClick = (cell: Cell): boolean => {
     return true;
   }
   placement = { cell, facing };
-  setPrimaryEnabled(true);
-  setStatus("Good spot. Confirm to rebuild.");
+  confirmBuild();
   return true;
 };
 
@@ -583,6 +670,7 @@ export const isHomeActionActive = (): boolean => mode !== "closed";
 export const isHomeActionPlacingHouse = (): boolean => mode === "movePlace";
 
 export const closeHomeActions = (): void => {
+  suspendedForOverlay = false;
   close();
 };
 

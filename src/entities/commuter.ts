@@ -4,15 +4,12 @@ import {
   advanceOnRail,
   computeLanePath,
   computeRoadRail,
+  getRailCurvature,
   type RailState,
 } from "../gfx/pathing";
 import { toSvgPoint } from "../gfx/svg-utils";
 import { computeTargetSpeed, smoothSpeed } from "../logic/commuter-traffic-ai";
-import {
-  findRoute,
-  routeCrossesPending,
-  sameRoute,
-} from "../logic/find-route";
+import { findRoute, routeCrossesPending, sameRoute } from "../logic/find-route";
 import { commuters } from "../state";
 import type { Cell, Pixel } from "../types";
 import { samePoint } from "../util/geometry";
@@ -24,6 +21,12 @@ const newRail = (route: Cell[]): RailState => ({
   index: 0,
   t: 0,
 });
+
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+const smoothstep = (value: number): number => value * value * (3 - 2 * value);
+const PARKING_WAIT_TICKS = 120;
+
+type WorkplaceRouteDock = "arrival" | "departure";
 
 type CommuterState =
   | "home"
@@ -83,9 +86,28 @@ export class Commuter extends GameObjectClass {
     this.lastTraversed = null;
   }
 
+  private buildWorkplaceAwareRoadRail(
+    route: Cell[],
+    dock?: WorkplaceRouteDock,
+  ): Pixel[] {
+    const lanePath = computeLanePath(route);
+    if (dock && lanePath.length > 0) {
+      const driveway =
+        dock === "arrival"
+          ? this.workplace.getDrivewayPoint()
+          : this.workplace.getDepartureDrivewayPoint();
+      if (dock === "arrival") lanePath[lanePath.length - 1] = driveway;
+      else lanePath[0] = driveway;
+    }
+    return computeRoadRail(lanePath);
+  }
+
   /** Rail rebuilt with a Bézier prefix from current pos → `route[0]`'s lane point — momentum-preserving. */
-  private buildTransitionRail(route: Cell[]): RailState {
-    const rail = computeRoadRail(computeLanePath(route));
+  private buildTransitionRail(
+    route: Cell[],
+    dock?: WorkplaceRouteDock,
+  ): RailState {
+    const rail = this.buildWorkplaceAwareRoadRail(route, dock);
     const target = rail[0]!;
     const hlen = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
     if (hlen > 0) {
@@ -127,7 +149,10 @@ export class Commuter extends GameObjectClass {
     ) {
       this.lastTraversed = currentEdgeStart;
     }
-    this.railState = this.buildTransitionRail(route);
+    this.railState = this.buildTransitionRail(
+      route,
+      this.state === "toWork" ? "arrival" : undefined,
+    );
   }
 
   private unassignFromWorkplace(): void {
@@ -151,20 +176,25 @@ export class Commuter extends GameObjectClass {
     this.carriesLoad = false;
     this.pendingRoute = null;
     this.setRoute(route);
-    this.railState = newRail(route);
+    this.railState = {
+      rail: this.buildWorkplaceAwareRoadRail(route, "arrival"),
+      index: 0,
+      t: 0,
+    };
   }
 
   private becomeParking(rail: Pixel[]): void {
     this.state = "parking";
     this.railState = { rail, index: 0, t: 0 };
-    this.prevSpeed = 0;
+    this.prevSpeed = Math.min(this.prevSpeed, 0.16);
     this.pendingRoute = null;
   }
 
   private becomeAtWork(): void {
     this.state = "atWork";
-    this.dx = this.workplace.bayHeading.x * 0.001;
-    this.dy = this.workplace.bayHeading.y * 0.001;
+    const heading = this.workplace.getBayHeading(this);
+    this.dx = heading.x * 0.001;
+    this.dy = heading.y * 0.001;
     this.carriesLoad = true;
     this.officeTimer = 1;
     this.prevSpeed = 0;
@@ -178,11 +208,20 @@ export class Commuter extends GameObjectClass {
     this.prevSpeed = 0;
   }
 
-  private becomeToHome(route: Cell[], opts: { smooth?: boolean } = {}): void {
+  private becomeToHome(
+    route: Cell[],
+    opts: { fromWorkplaceDriveway?: boolean; smooth?: boolean } = {},
+  ): void {
     this.state = "toHome";
     this.pendingRoute = null;
     this.setRoute(route);
-    if (opts.smooth) {
+    if (opts.fromWorkplaceDriveway) {
+      this.railState = {
+        rail: this.buildWorkplaceAwareRoadRail(route, "departure"),
+        index: 0,
+        t: 0,
+      };
+    } else if (opts.smooth) {
       this.railState = this.buildTransitionRail(route);
       // prevSpeed preserved — caller wants a momentum-preserving transition.
     } else {
@@ -234,7 +273,11 @@ export class Commuter extends GameObjectClass {
         from: this.destination!,
         to: [this.parent! as unknown as Cell],
       });
-      if (homeRoute) this.becomeToHome(homeRoute);
+      if (homeRoute) {
+        this.workplace.releaseParkingLane(this);
+        this.workplace.leaveBay(this);
+        this.becomeToHome(homeRoute);
+      }
     }
 
     const { x: destX, y: destY } = toSvgPoint(destCell);
@@ -282,15 +325,17 @@ export class Commuter extends GameObjectClass {
       return;
     }
 
-    const to = (this.state === "toHome" ? [homeCell] : [this.destination]);
+    const to = this.state === "toHome" ? [homeCell] : [this.destination];
 
-    const newRoute = findRoute({
-      from: this.route[0]!,
-      to,
-      avoidPending: currentRouteCrossesPending,
-    }) ?? (currentRouteCrossesPending
-      ? findRoute({ from: this.route[0]!, to })
-      : undefined);
+    const newRoute =
+      findRoute({
+        from: this.route[0]!,
+        to,
+        avoidPending: currentRouteCrossesPending,
+      }) ??
+      (currentRouteCrossesPending
+        ? findRoute({ from: this.route[0]!, to })
+        : undefined);
     if (!newRoute) return;
     if (sameRoute(newRoute, this.route)) return;
     this.smoothReroute(newRoute);
@@ -315,16 +360,22 @@ export class Commuter extends GameObjectClass {
 
   private tickAtWork(): void {
     this.officeTimer++;
-    if (this.officeTimer <= 120) return;
+    if (this.officeTimer <= PARKING_WAIT_TICKS) return;
+    if (!this.workplace.isParkingLaneClearFor(this)) {
+      this.officeTimer = 121;
+      return;
+    }
 
-    const route = findRoute({
-      from: this.destination!,
-      to: [this.parent! as unknown as Cell],
-      avoidPending: true,
-    }) ?? findRoute({
-      from: this.destination!,
-      to: [this.parent! as unknown as Cell],
-    });
+    const route =
+      findRoute({
+        from: this.destination!,
+        to: [this.parent! as unknown as Cell],
+        avoidPending: true,
+      }) ??
+      findRoute({
+        from: this.destination!,
+        to: [this.parent! as unknown as Cell],
+      });
     if (!route) {
       this.officeTimer = Math.random() * 40 + 40;
       return;
@@ -332,9 +383,34 @@ export class Commuter extends GameObjectClass {
     this.beginUnparking(route);
   }
 
+  private remainingRailDistance(): number {
+    if (this.railState.rail.length <= 1) return 0;
+
+    let distance = 0;
+    const start = this.railState.rail[this.railState.index];
+    const next = this.railState.rail[this.railState.index + 1];
+    if (start && next) {
+      const current = {
+        x: start.x + (next.x - start.x) * this.railState.t,
+        y: start.y + (next.y - start.y) * this.railState.t,
+      };
+      distance += Math.hypot(next.x - current.x, next.y - current.y);
+    }
+
+    for (
+      let i = this.railState.index + 1;
+      i < this.railState.rail.length - 1;
+      i++
+    ) {
+      const a = this.railState.rail[i]!;
+      const b = this.railState.rail[i + 1]!;
+      distance += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    return distance;
+  }
+
   private beginUnparking(route: Cell[]): void {
-    const exitTarget = toSvgPoint(route[0]!);
-    const exitRail = this.workplace.getExitRail(this, exitTarget);
+    const exitRail = this.workplace.getExitRail(this);
     this.workplace.leaveBay(this);
     if (exitRail) this.becomeUnparking(exitRail, route);
     else this.becomeToHome(route);
@@ -353,6 +429,7 @@ export class Commuter extends GameObjectClass {
           to: [this.parent! as unknown as Cell],
         });
         if (homeRoute) {
+          this.workplace.releaseParkingLane(this);
           this.workplace.leaveBay(this);
           this.becomeToHome(homeRoute);
           return true;
@@ -361,8 +438,30 @@ export class Commuter extends GameObjectClass {
       return false;
     }
 
-    const segsRemaining = this.railState.rail.length - 2 - this.railState.index;
-    const speed = segsRemaining <= 2 ? 0.09 : segsRemaining <= 5 ? 0.15 : 0.24;
+    const progress = clamp01(
+      (this.railState.index + this.railState.t) /
+        Math.max(1, this.railState.rail.length - 1),
+    );
+    const ramp =
+      smoothstep(clamp01(progress / 0.26)) *
+      smoothstep(clamp01((1 - progress) / 0.26));
+    const curvature = getRailCurvature(
+      this.railState.rail,
+      this.railState.index,
+      10,
+    );
+    const curveLimit =
+      curvature > 0.75
+        ? 0.06
+        : curvature > 0.45
+          ? 0.075
+          : curvature > 0.24
+            ? 0.1
+            : 0.135;
+    const targetSpeed = Math.min(0.05 + 0.09 * ramp, curveLimit);
+    const alpha = targetSpeed < this.prevSpeed ? 0.1 : 0.045;
+    this.prevSpeed += (targetSpeed - this.prevSpeed) * alpha;
+    const speed = Math.min(0.16, Math.max(0.035, this.prevSpeed));
 
     const result = advanceOnRail(this.railState, speed);
     this.x = result.x;
@@ -375,6 +474,7 @@ export class Commuter extends GameObjectClass {
     }
 
     if (this.state === "parking") {
+      this.workplace.releaseParkingLane(this);
       this.becomeAtWork();
       this.workplace.commuterArrived();
     } else if (this.pendingRoute) this.finishUnparking();
@@ -382,17 +482,22 @@ export class Commuter extends GameObjectClass {
   }
 
   private finishUnparking(): void {
+    this.workplace.releaseParkingLane(this);
     // Streets may have been removed during unparking — re-route from the rail's exit
     // before committing, falling back to the stale route only if no path exists.
-    const fresh = findRoute({
-      from: this.pendingRoute![0]!,
-      to: [this.parent! as unknown as Cell],
-      avoidPending: true,
-    }) ?? findRoute({
-      from: this.pendingRoute![0]!,
-      to: [this.parent! as unknown as Cell],
+    const fresh =
+      findRoute({
+        from: this.pendingRoute![0]!,
+        to: [this.parent! as unknown as Cell],
+        avoidPending: true,
+      }) ??
+      findRoute({
+        from: this.pendingRoute![0]!,
+        to: [this.parent! as unknown as Cell],
+      });
+    this.becomeToHome(fresh ?? this.pendingRoute!, {
+      fromWorkplaceDriveway: true,
     });
-    this.becomeToHome(fresh ?? this.pendingRoute!);
   }
 
   // ─── Open-road driving (toWork + toHome) ──────────────────────────────
@@ -400,14 +505,19 @@ export class Commuter extends GameObjectClass {
   private tickDriving(): void {
     this.consumeReachedCells();
 
-    smoothSpeed(this, computeTargetSpeed(this));
+    let targetSpeed = computeTargetSpeed(this);
+    if (this.state === "toWork") {
+      const remaining = this.remainingRailDistance();
+      const approach = 1 - smoothstep(clamp01((remaining - 2) / 12));
+      targetSpeed = Math.min(targetSpeed, 0.12 + 0.16 * (1 - approach));
+    }
+    smoothSpeed(this, targetSpeed);
 
     const result = advanceOnRail(this.railState, this.prevSpeed);
     this.x = result.x;
     this.y = result.y;
     this.dx = result.dx;
     this.dy = result.dy;
-
 
     if (result.done) this.arriveAtDestination();
   }
@@ -438,6 +548,8 @@ export class Commuter extends GameObjectClass {
       this.becomeParking(parkingRail);
     } else {
       // All bays occupied — head home without parking.
+      this.workplace.releaseParkingLane(this);
+      this.workplace.leaveBay(this);
       const homeRoute = findRoute({
         from: this.destination!,
         to: [this.parent! as unknown as Cell],

@@ -4,7 +4,9 @@ import { colors } from "../gfx/colors";
 import { isPastHalfwayInto } from "../gfx/coords";
 import { streetShadowLayer } from "../gfx/layers";
 import { createSvgElement, toSvgEdge, toSvgPoint } from "../gfx/svg-utils";
+import { streetWouldMixColors } from "../logic/color-lock";
 import { streetMatchesEdge } from "../logic/find-route";
+import { streetWouldCreateIntersection } from "../logic/intersections";
 import { upgradeStreetToMotorway } from "../logic/motorway-upgrade";
 import { commitStreetChanges } from "../logic/orchestrator";
 import {
@@ -204,6 +206,8 @@ export function onMove(
   }
   if (dragBuildMode === "motorway") return "blocked";
   if (streetWouldClipBuilding(startCell, cell)) return "blocked";
+  if (streetWouldCreateIntersection(startCell, cell)) return "blocked";
+  if (streetWouldMixColors(startCell, cell)) return "blocked";
 
   if (!reserveBuildResource(needsBridge)) return "exhausted";
 

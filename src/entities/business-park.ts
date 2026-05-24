@@ -1,6 +1,7 @@
 import { GameObjectClass } from "kontra";
 
-import { computeParkingRail } from "../gfx/parking-rail";
+import { computeParkingPathRail } from "../gfx/parking-rail";
+import { toSvgPoint } from "../gfx/svg-utils";
 import {
   dispatchCommutersFor,
   hasDispatchableCommuter,
@@ -19,14 +20,6 @@ import type { Commuter } from "./commuter";
 import { Street } from "./street";
 import { drawStreets } from "./street.render";
 
-// Bay heading indexed by entry edge: top→down, right→left, bottom→up, left→right
-const BAY_HEADINGS: Direction[] = [
-  { x: 0, y: 1 } as Direction,
-  { x: -1, y: 0 } as Direction,
-  { x: 0, y: -1 } as Direction,
-  { x: 1, y: 0 } as Direction,
-];
-
 export interface BusinessParkProperties {
   x?: number;
   y?: number;
@@ -37,9 +30,33 @@ export interface BusinessParkProperties {
   borderColors?: string[];
   relativePathPoints?: Array<Point & { locked?: boolean }>;
   parkingCapacity?: number;
+  parkingRotation?: number;
+  parkingVariant?: number;
   silentAppearChime?: boolean;
   [key: string]: unknown;
 }
+
+const inferParkingVariant = (
+  entryEdge: number,
+  entryCell: Cell | undefined,
+  park: { x: number; y: number; width: number; height: number },
+): number => {
+  if (!entryCell) return Math.floor(Math.random() * 2);
+  if (entryEdge === 0) return entryCell.x - park.x < park.width / 2 ? 0 : 1;
+  if (entryEdge === 1) return entryCell.y - park.y < park.height / 2 ? 0 : 1;
+  if (entryEdge === 2) return entryCell.x - park.x < park.width / 2 ? 1 : 0;
+  return entryCell.y - park.y < park.height / 2 ? 1 : 0;
+};
+
+const compactPixels = (points: Pixel[]): Pixel[] => {
+  const route: Pixel[] = [];
+  for (const point of points) {
+    const last = route.at(-1);
+    if (!last || (last.x - point.x) ** 2 + (last.y - point.y) ** 2 > 0.01)
+      route.push(point);
+  }
+  return route;
+};
 
 export class BusinessPark extends GameObjectClass {
   declare delay: number;
@@ -75,11 +92,38 @@ export class BusinessPark extends GameObjectClass {
   // Parking
   bayCenters: Pixel[] = [];
   bayLanePoints: Pixel[] = [];
+  bayExitLanePoints: Pixel[] = [];
+  bayReturnLanePoints: Pixel[] = [];
+  bayEntryRails: Pixel[][] = [];
+  bayExitRails: Pixel[][] = [];
+  bayEntryDistances: number[] = [];
+  drivewayPoint?: Pixel;
+  departureDrivewayPoint?: Pixel;
   baySlots: Array<Commuter | null> = [null, null, null];
+  parkingLaneUsers = new Set<Commuter>();
+  entryCell?: Cell;
   entryEdge = 2; // 0=top, 1=right, 2=bottom, 3=left
+  parkingRotation = 0;
+  parkingVariant = 0;
 
   get bayHeading(): Direction {
-    return BAY_HEADINGS[this.entryEdge]!;
+    if (this.parkingRotation === 1) return { x: 1, y: 0 } as Direction;
+    if (this.parkingRotation === 2) return { x: 0, y: 1 } as Direction;
+    if (this.parkingRotation === 3) return { x: -1, y: 0 } as Direction;
+    return { x: 0, y: -1 } as Direction;
+  }
+
+  getBayHeading(c: Commuter): Direction {
+    const slot = this.baySlots.indexOf(c);
+    const center = slot === -1 ? undefined : this.bayCenters[slot];
+    const exit = slot === -1 ? undefined : this.bayExitRails[slot]?.[0];
+    if (!center || !exit) return this.bayHeading;
+
+    const dx = exit.x - center.x;
+    const dy = exit.y - center.y;
+    if (Math.abs(dx) > Math.abs(dy))
+      return { x: Math.sign(dx), y: 0 } as Direction;
+    return { x: 0, y: Math.sign(dy) } as Direction;
   }
 
   get pendingParkingArrivals(): number {
@@ -91,6 +135,7 @@ export class BusinessPark extends GameObjectClass {
   }
 
   get availableArrivalSlots(): number {
+    if (this.parkingLaneUsers.size > 0) return 0;
     return Math.max(
       0,
       this.parkingCapacity - this.occupiedBayCount - this.assignedPeople.length,
@@ -102,7 +147,16 @@ export class BusinessPark extends GameObjectClass {
   }
 
   parkInBay(c: Commuter): void {
-    const slot = this.baySlots.indexOf(null);
+    let slot = -1;
+    let bestDistance = Infinity;
+    for (let i = 0; i < this.baySlots.length; i++) {
+      if (this.baySlots[i]) continue;
+      const distance = this.bayEntryDistances[i] ?? i;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        slot = i;
+      }
+    }
     if (slot === -1) return;
     this.baySlots[slot] = c;
   }
@@ -110,37 +164,78 @@ export class BusinessPark extends GameObjectClass {
   getParkingRail(c: Commuter): Pixel[] | null {
     const slot = this.baySlots.indexOf(c);
     if (slot === -1) return null;
+    const entryRail = this.bayEntryRails[slot];
+    if (entryRail?.length) {
+      const rail = computeParkingPathRail(
+        compactPixels([{ x: c.x, y: c.y } as Pixel, ...entryRail]),
+      );
+      if (rail.length > 1) this.parkingLaneUsers.add(c);
+      return rail;
+    }
+
     const lane = this.bayLanePoints[slot];
     const center = this.bayCenters[slot];
+    const returnLane = this.bayReturnLanePoints[slot];
     if (!lane || !center) return null;
-    return computeParkingRail({ x: c.x, y: c.y } as Pixel, lane, center);
+    const rail = computeParkingPathRail(
+      [{ x: c.x, y: c.y } as Pixel, returnLane, lane, center].filter(
+        (point): point is Pixel => !!point,
+      ),
+    );
+    if (rail.length > 1) this.parkingLaneUsers.add(c);
+    return rail;
   }
 
-  getExitRail(c: Commuter, exitTarget: Pixel): Pixel[] | null {
+  getDrivewayPoint(): Pixel {
+    return this.drivewayPoint ?? toSvgPoint(this.entryCell ?? this);
+  }
+
+  getDepartureDrivewayPoint(): Pixel {
+    return this.departureDrivewayPoint ?? this.getDrivewayPoint();
+  }
+
+  getExitRail(c: Commuter): Pixel[] | null {
     const slot = this.baySlots.indexOf(c);
     if (slot === -1) return null;
-    const lane = this.bayLanePoints[slot];
+    const exitRail = this.bayExitRails[slot];
+    if (exitRail?.length) {
+      const rail = computeParkingPathRail(
+        compactPixels([{ x: c.x, y: c.y } as Pixel, ...exitRail]),
+      );
+      if (rail.length > 1) this.parkingLaneUsers.add(c);
+      return rail;
+    }
+
+    const lane = this.bayExitLanePoints[slot] ?? this.bayLanePoints[slot];
+    const returnLane = this.bayReturnLanePoints[slot];
     if (!lane) return null;
-    return computeParkingRail({ x: c.x, y: c.y } as Pixel, lane, exitTarget);
+    const rail = computeParkingPathRail(
+      [
+        { x: c.x, y: c.y } as Pixel,
+        lane,
+        returnLane,
+        this.getDepartureDrivewayPoint(),
+      ].filter((point): point is Pixel => !!point),
+    );
+    if (rail.length > 1) this.parkingLaneUsers.add(c);
+    return rail;
+  }
+
+  releaseParkingLane(c: Commuter): void {
+    this.parkingLaneUsers.delete(c);
+  }
+
+  isParkingLaneClearFor(c: Commuter): boolean {
+    if (this.assignedPeople.length > 0) return false;
+    return (
+      this.parkingLaneUsers.size === 0 ||
+      (this.parkingLaneUsers.size === 1 && this.parkingLaneUsers.has(c))
+    );
   }
 
   leaveBay(c: Commuter): void {
     const slot = this.baySlots.indexOf(c);
     if (slot !== -1) this.baySlots[slot] = null;
-  }
-
-  private hurryParkedCommuters(): void {
-    if (this.availableArrivalSlots > 0) return;
-
-    const parked = this.baySlots.filter(
-      (c): c is Commuter => c?.state === "atWork",
-    );
-    if (!parked.length) return;
-
-    const oldest = parked.reduce((best, c) =>
-      c.officeTimer > best.officeTimer ? c : best,
-    );
-    oldest.officeTimer = Math.max(oldest.officeTimer, 110);
   }
 
   hasType(color: string): boolean {
@@ -170,6 +265,8 @@ export class BusinessPark extends GameObjectClass {
     }
 
     if (relativePathPoints) {
+      const inside = relativePathPoints[0]!;
+      this.entryCell = { x: this.x + inside.x, y: this.y + inside.y } as Cell;
       const outside = relativePathPoints[1]!;
       if (outside.y < 0) this.entryEdge = 0;
       else if (outside.x >= this.width) this.entryEdge = 1;
@@ -178,6 +275,10 @@ export class BusinessPark extends GameObjectClass {
     }
 
     this.parkingCapacity = properties.parkingCapacity ?? 3;
+    this.parkingRotation = properties.parkingRotation ?? this.entryEdge;
+    this.parkingVariant =
+      properties.parkingVariant ??
+      inferParkingVariant(this.entryEdge, this.entryCell, this);
     this.baySlots = Array<Commuter | null>(this.parkingCapacity).fill(null);
 
     spawnSequence(this, relativePathPoints);
@@ -209,10 +310,11 @@ export class BusinessPark extends GameObjectClass {
       const pendingDemand = Math.max(0, this.demand);
       if (pendingDemand > 0) {
         const noRouteAvailable = !hasDispatchableCommuter(this);
-        this.hurryParkedCommuters();
+        const routedPressure = Math.min(4, pendingDemand);
+        const unroutedPressure = Math.min(0.35, pendingDemand * 0.18);
         this.demandTimer -= noRouteAvailable
-          ? Math.min(2, pendingDemand)
-          : Math.min(4, pendingDemand);
+          ? unroutedPressure
+          : routedPressure;
       } else {
         this.demandTimer = Math.min(
           this.demandTimer + cfg.demandTimerRecovery,

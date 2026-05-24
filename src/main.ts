@@ -5,7 +5,13 @@ import type { AudioMode } from "./audio";
 import { initAudio, playSpeedToggleSound, startGameMusic } from "./audio";
 import { BusinessPark } from "./entities/business-park";
 import { House } from "./entities/house";
-import { bootMenu, gameState, initGameFlow, returnToMenu } from "./game-flow";
+import {
+  bootMenu,
+  gameState,
+  initGameFlow,
+  restartCurrentRun,
+  returnToMenu,
+} from "./game-flow";
 import { gridLockToggle, gridRedLockToggle } from "./input/grid-toggle";
 import { initPointer } from "./input/pointer";
 import { renderWorld, tickWorld } from "./logic/orchestrator";
@@ -14,7 +20,18 @@ import { TIMING } from "./logic/timing";
 import { addBusinessPark, addHouse } from "./state";
 import { initTelemetry } from "./telemetry";
 import { gameoverWrapper } from "./ui/gameover";
-import { initHomeActions } from "./ui/home-actions";
+import {
+  closeHomeActions,
+  initHomeActions,
+  isHomeActionActive,
+  startHomeActionSwap,
+} from "./ui/home-actions";
+import {
+  hideSessionMenu,
+  initSessionMenu,
+  isSessionMenuOpen,
+  showSessionMenu,
+} from "./ui/session-menu";
 import {
   audioModeButton,
   clock,
@@ -43,6 +60,7 @@ interface HmrData {
   totalUpdateCount?: number;
   updateCount?: number;
   renderCount?: number;
+  paused?: boolean;
   gameOverlayHidden?: boolean;
 }
 
@@ -62,6 +80,7 @@ if (hmrData?.initialized) {
   gameState.totalUpdateCount = hmrData.totalUpdateCount ?? 0;
   gameState.updateCount = hmrData.updateCount ?? 0;
   gameState.renderCount = hmrData.renderCount ?? 0;
+  gameState.paused = hmrData.paused ?? false;
   gameState.gameOverlayHidden = hmrData.gameOverlayHidden ?? false;
 }
 
@@ -90,6 +109,23 @@ initAudio();
 if (!isHmr) {
   initUi();
   initHomeActions();
+  initSessionMenu({
+    onContinue: () => {
+      closeInGameMenu();
+    },
+    onRestart: () => {
+      hideSessionMenu();
+      closeHomeActions();
+      setPauseVisual(false);
+      restartCurrentRun();
+    },
+    onMainMenu: () => {
+      hideSessionMenu();
+      closeHomeActions();
+      setPauseVisual(false);
+      returnToMenu();
+    },
+  });
   initPointer();
 }
 
@@ -106,18 +142,51 @@ setSpawnFactory({
 
 if (!isHmr) bootMenu();
 
+const setPauseVisual = (paused: boolean): void => {
+  if (paused) {
+    pauseSvgPath.setAttribute("d", "M7 6 7 10M7 6 10 8 7 10");
+    pauseSvgPath.style.transform = "rotate(0)";
+  } else {
+    pauseSvgPath.setAttribute("d", "M6 6 6 10M10 6 10 8 10 10");
+    pauseSvgPath.style.transform = "rotate(180deg)";
+  }
+};
+
 const togglePause = (): void => {
   if (gameState.gameStarted && gameState.totalUpdateCount > TIMING.hud.pause) {
     if (loop.isStopped) {
       loop.start();
-      pauseSvgPath.setAttribute("d", "M6 6 6 10M10 6 10 8 10 10");
-      pauseSvgPath.style.transform = "rotate(180deg)";
+      gameState.paused = false;
+      setPauseVisual(false);
     } else {
       loop.stop();
-      pauseSvgPath.setAttribute("d", "M7 6 7 10M7 6 10 8 7 10");
-      pauseSvgPath.style.transform = "rotate(0)";
+      gameState.paused = true;
+      setPauseVisual(true);
     }
   }
+};
+
+const openInGameMenu = ({ allowStopped = false } = {}): void => {
+  if (!gameState.gameStarted || gameState.totalUpdateCount <= TIMING.hud.pause)
+    return;
+  if (loop.isStopped && !gameState.paused && !allowStopped) return;
+  loop.stop();
+  gameState.paused = true;
+  setPauseVisual(true);
+  showSessionMenu();
+};
+
+const closeInGameMenu = (): void => {
+  hideSessionMenu();
+  if (!gameState.gameStarted) return;
+  loop.start();
+  gameState.paused = false;
+  setPauseVisual(false);
+};
+
+const toggleInGameMenu = (): void => {
+  if (isSessionMenuOpen()) closeInGameMenu();
+  else openInGameMenu();
 };
 
 const ac = new AbortController();
@@ -249,14 +318,13 @@ helpCloseButton.addEventListener("click", closeHelp, { signal });
 helpMenuButton.addEventListener(
   "click",
   () => {
-    if (
-      gameState.gameStarted &&
-      !window.confirm("Leave this city and return to the menu?")
-    ) {
+    if (!gameState.gameStarted) {
+      closeHelp();
       return;
     }
+    resumeAfterHelp = false;
     closeHelp();
-    if (gameState.gameStarted) returnToMenu();
+    openInGameMenu({ allowStopped: true });
   },
   { signal },
 );
@@ -289,10 +357,54 @@ window.addEventListener(
   { signal },
 );
 
+const isPlainShortcutEvent = (event: KeyboardEvent): boolean =>
+  !helpOpen &&
+  !event.repeat &&
+  !event.metaKey &&
+  !event.ctrlKey &&
+  !event.altKey;
+
+const shortcutKey = (event: KeyboardEvent, code: string, key: string): boolean =>
+  event.code === code || event.key.toLowerCase() === key;
+
+const handleGlobalKeydown = (event: KeyboardEvent): void => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (helpOpen) closeHelp();
+    else toggleInGameMenu();
+    return;
+  }
+  if (isSessionMenuOpen()) return;
+  if (!isPlainShortcutEvent(event)) return;
+
+  const shortcuts = [
+    {
+      enabled: true,
+      matches: shortcutKey(event, "KeyG", "g"),
+      run: gridLockToggle,
+    },
+    {
+      enabled: gameState.gameStarted && !isHomeActionActive(),
+      matches: shortcutKey(event, "KeyD", "d"),
+      run: gridRedLockToggle,
+    },
+    {
+      enabled: gameState.gameStarted,
+      matches: shortcutKey(event, "KeyS", "s"),
+      run: startHomeActionSwap,
+    },
+  ];
+
+  const shortcut = shortcuts.find((item) => item.enabled && item.matches);
+  if (!shortcut) return;
+  event.preventDefault();
+  shortcut.run();
+};
+
 document.addEventListener(
   "keypress",
   (event) => {
-    if (helpOpen) return;
+    if (helpOpen || isSessionMenuOpen()) return;
     if (event.key === " ") {
       // Prevent double-toggling when the pause button itself has focus.
       if (event.target !== pauseButton) togglePause();
@@ -304,20 +416,7 @@ document.addEventListener(
 );
 document.addEventListener(
   "keydown",
-  (event) => {
-    if (event.key === "Escape") closeHelp();
-    if (
-      !helpOpen &&
-      !event.repeat &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      (event.code === "KeyG" || event.key.toLowerCase() === "g")
-    ) {
-      event.preventDefault();
-      gridLockToggle();
-    }
-  },
+  handleGlobalKeydown,
   { signal },
 );
 
@@ -337,6 +436,7 @@ if (import.meta.hot) {
     d.totalUpdateCount = gameState.totalUpdateCount;
     d.updateCount = gameState.updateCount;
     d.renderCount = gameState.renderCount;
+    d.paused = gameState.paused;
     d.gameOverlayHidden = gameState.gameOverlayHidden;
     ac.abort();
     loop.stop();

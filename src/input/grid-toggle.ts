@@ -1,3 +1,4 @@
+import { challengeDisablesDelete } from "../challenge";
 import { gridRect, gridRectRed } from "../gfx/grid";
 import { svgElement, svgHazardLines, svgHazardLinesRed } from "../gfx/svg";
 import {
@@ -103,6 +104,7 @@ export const gridLockToggle = (): void => {
 };
 
 export const gridRedShow = (): void => {
+  if (challengeDisablesDelete()) return;
   svgElement.style.cursor = "crosshair";
   gridRectRed.style.opacity = "0.9";
   svgHazardLinesRed.style.opacity = "0.9";
@@ -130,6 +132,7 @@ if (gridRedState.locked) {
 }
 
 export const gridRedLockToggle = (): void => {
+  if (challengeDisablesDelete()) return;
   if (gridRedState.locked) {
     gridRedState.locked = false;
     gridRedHide();

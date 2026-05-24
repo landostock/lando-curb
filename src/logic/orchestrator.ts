@@ -1,22 +1,26 @@
 import { playUpgradeReadyFanfare } from "../audio";
 import { growBoard } from "../board";
+import { challengeUsesAutoRoadUpgrades } from "../challenge";
 import { rerouteAllCommuters } from "../entities/commuter";
 import { drawStreets } from "../entities/street.render";
 import { checkGameOver, gameState } from "../game-flow";
 import { updateGridBounds } from "../gfx/grid";
 import { updateViewBox } from "../gfx/svg";
-import { businessParks, commuters, houses } from "../state";
+import { businessParks, commuters, houses, session } from "../state";
 import { updateTelemetry } from "../telemetry";
 import {
   clock,
   fireUpgradeCharge,
+  homeActionIndicator,
   motorwayIndicator,
   pathTilesIndicator,
   pauseButton,
   resetUpgradeCharge,
   scoreCounters,
+  setChallengeHudVisible,
   setGameplayControlsVisible,
   setUpgradeCharge,
+  updateInventoryCounters,
 } from "../ui/ui";
 import { showUpgradePicker } from "../ui/upgrades";
 import { pickRandom } from "../util/random";
@@ -62,10 +66,12 @@ const revealHudMilestones = (tick: number): void => {
   if (tick === TIMING.hud.score) {
     scoreCounters.style.opacity = "1";
     scoreCounters.style.pointerEvents = "all";
+    setChallengeHudVisible(true);
   }
   if (tick === TIMING.hud.inventory) {
     pathTilesIndicator.style.opacity = "1";
     motorwayIndicator.style.opacity = "1";
+    if (session.homeActions > 0) homeActionIndicator.style.opacity = "1";
     setGameplayControlsVisible(true);
   }
   if (tick === TIMING.hud.clock) {
@@ -114,9 +120,16 @@ const maybeShowUpgradePicker = (tick: number, loop: LoopControl): void => {
   if (upgradePickerOpen || tick === lastUpgradeTick) return;
   lastUpgradeTick = tick;
   scheduleNextUpgrade(tick);
-  loop.stop();
   fireUpgradeCharge();
   playUpgradeReadyFanfare();
+
+  if (challengeUsesAutoRoadUpgrades()) {
+    session.paths += 8;
+    updateInventoryCounters();
+    return;
+  }
+
+  loop.stop();
   upgradePickerOpen = showUpgradePicker(() => {
     upgradePickerOpen = false;
     loop.start();

@@ -2,7 +2,10 @@ import { playUpgradeSound } from "../audio";
 import { colors } from "../gfx/colors";
 import { createElement, createSvgElement } from "../gfx/svg-utils";
 import { lakes, session } from "../state";
-import { closeHomeActions } from "./home-actions";
+import {
+  resumeHomeActionsAfterOverlay,
+  suspendHomeActionsForOverlay,
+} from "./home-actions";
 import {
   bridgeIndicator,
   homeActionIndicator,
@@ -241,6 +244,7 @@ const createCard = (
 let cards: HTMLElement[] = [];
 let pickerOpen = false;
 let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+let resumeHomeActionsAfterPick = false;
 
 const setPickerPanelInteractive = (interactive: boolean): void => {
   pickerPanel.style.pointerEvents = interactive ? "all" : "none";
@@ -266,7 +270,7 @@ export const showUpgradePicker = (onPick: () => void): boolean => {
   if (pickerOpen) return false;
   pickerOpen = true;
   setMapPeekOpen(false);
-  closeHomeActions();
+  resumeHomeActionsAfterPick = suspendHomeActionsForOverlay();
   clearTimeout(cleanupTimer);
   cards.forEach((card) => card.remove());
   cards = [];
@@ -313,6 +317,10 @@ const hideUpgradePicker = (): void => {
   setDeveloperModeButtonSuppressed(false);
   setHelpButtonVisible(true);
   setResourceHudElevated(false);
+  if (resumeHomeActionsAfterPick) {
+    resumeHomeActionsAfterPick = false;
+    resumeHomeActionsAfterOverlay();
+  }
 
   // Clean up cards after transition
   cleanupTimer = setTimeout(() => {
@@ -322,5 +330,6 @@ const hideUpgradePicker = (): void => {
 };
 
 export const resetUpgrades = (): void => {
+  resumeHomeActionsAfterPick = false;
   hideUpgradePicker();
 };

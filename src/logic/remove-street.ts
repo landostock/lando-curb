@@ -1,4 +1,5 @@
 import { playRemoveThup } from "../audio";
+import { challengeDisablesDelete } from "../challenge";
 import type { Street } from "../entities/street";
 import { commuters, session, streets } from "../state";
 import type { Cell } from "../types";
@@ -51,7 +52,9 @@ const commuterAtWorkNeedsStreetHome = (
 const hurryCommutersHomeFor = (street: Street): void => {
   for (const c of commuters) {
     if (c.state === "atWork" && commuterAtWorkNeedsStreetHome(street, c)) {
-      c.officeTimer = 121;
+      c.officeTimer = Math.max(c.officeTimer, 121);
+    } else if (routeIncludesStreet(street, c)) {
+      c.rerouteIfBetter();
     }
   }
 };
@@ -79,6 +82,7 @@ const isStreetStillNeeded = (street: Street): boolean => {
 };
 
 export const removePath = (cell: Cell, prevCell?: Cell): void => {
+  if (challengeDisablesDelete()) return;
   // Edge mode: dragging from an adjacent cell — remove only the street between them.
   // Otherwise (single click, same cell, or non-adjacent jump): remove every street at `cell`.
   const useEdgeMode = !!prevCell && isStreetEdge(prevCell, cell);

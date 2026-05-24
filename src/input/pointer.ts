@@ -1,4 +1,5 @@
 import { grid } from "../board";
+import { challengeDisablesPausedInteraction } from "../challenge";
 import { gameState } from "../game-flow";
 import { getBoardCell, isPastHalfwayInto } from "../gfx/coords";
 import { gridPointerLayer } from "../gfx/layers";
@@ -39,7 +40,9 @@ let lastPointerdownY = 0;
 const DBLCLICK_MS = 350;
 const DBLCLICK_PX2 = 20 * 20;
 
-const gameInputEnabled = (): boolean => gameState.gameStarted;
+const gameInputEnabled = (): boolean =>
+  gameState.gameStarted &&
+  (!challengeDisablesPausedInteraction() || !gameState.paused);
 
 const cancelPointerInteraction = (): void => {
   gridHide();

@@ -14,6 +14,13 @@ import { getSpawningConfig } from "../logic/spawning";
 import type { Pixel } from "../types";
 import type { BusinessPark } from "./business-park";
 
+interface LayoutRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** SVG elements owned exclusively by this render module */
 export interface BusinessParkRenderState {
   pinSvg: SVGGElement & { translate?: string };
@@ -28,6 +35,11 @@ export interface BusinessParkRenderState {
   parkOriginY: number;
   parkLotW: number;
   parkLotH: number;
+  parkX: number;
+  parkY: number;
+  parkW: number;
+  parkH: number;
+  buildingRects: LayoutRect[];
   buildingW: number;
   buildingH: number;
   prevProgress: number;
@@ -45,6 +57,13 @@ export interface BusinessParkRenderState {
 export interface BayGeometry {
   bayCenters: Pixel[];
   bayLanePoints: Pixel[];
+  bayExitLanePoints: Pixel[];
+  bayReturnLanePoints: Pixel[];
+  bayEntryRails: Pixel[][];
+  bayExitRails: Pixel[][];
+  bayEntryDistances: number[];
+  drivewayPoint: Pixel;
+  departureDrivewayPoint: Pixel;
 }
 
 const requireRenderState = (bp: BusinessPark): BusinessParkRenderState => {
@@ -56,6 +75,8 @@ const requireRenderState = (bp: BusinessPark): BusinessParkRenderState => {
 
 const roundness = 2;
 const borderLineThickness = 1;
+const parkingFraction = 0.56;
+const parkingInset = 0.58;
 
 interface ParkLayout {
   x: number;
@@ -70,6 +91,8 @@ interface ParkLayout {
   py: number;
   pw: number;
   ph: number;
+  buildingRects: LayoutRect[];
+  demandBounds: LayoutRect;
 }
 
 export function scheduleSpawnAnimation(bp: BusinessPark, delay: number): void {
@@ -87,6 +110,13 @@ function addBusinessParkToSvg(bp: BusinessPark): void {
   const bays = drawParkingLot(bp);
   bp.bayCenters = bays.bayCenters;
   bp.bayLanePoints = bays.bayLanePoints;
+  bp.bayExitLanePoints = bays.bayExitLanePoints;
+  bp.bayReturnLanePoints = bays.bayReturnLanePoints;
+  bp.bayEntryRails = bays.bayEntryRails;
+  bp.bayExitRails = bays.bayExitRails;
+  bp.bayEntryDistances = bays.bayEntryDistances;
+  bp.drivewayPoint = bays.drivewayPoint;
+  bp.departureDrivewayPoint = bays.departureDrivewayPoint;
   addBorder(bp, layout);
   addStatusPins(rs, layout);
 }
@@ -99,51 +129,55 @@ function computeLayout(bp: BusinessPark): ParkLayout {
   const svgHeight =
     toSvgEdge(bp.height) - borderLineThickness - gridLineThickness;
 
-  const isVert = bp.entryEdge === 1 || bp.entryEdge === 3;
-  const buildingCells = isVert ? bp.width - 1 : bp.height - 1;
-  const buildingSize =
-    toSvgEdge(buildingCells) - borderLineThickness / 2 - gridLineThickness / 2;
-  const parkingSize =
-    toSvgEdge(1) - borderLineThickness / 2 - gridLineThickness / 2;
-
-  let bx: number, by: number, bw: number, bh: number;
   let px: number, py: number, pw: number, ph: number;
+  const buildingRects: LayoutRect[] = [];
 
-  if (isVert) {
-    bh = svgHeight;
+  if (bp.parkingRotation === 3) {
+    px = x;
+    py = y;
+    pw = svgWidth * parkingFraction;
     ph = svgHeight;
-    bw = buildingSize;
-    pw = parkingSize;
-    if (bp.entryEdge === 3) {
-      px = x;
-      py = y;
-      bx = x + parkingSize;
-      by = y;
-    } else {
-      bx = x;
-      by = y;
-      px = x + buildingSize;
-      py = y;
-    }
-  } else {
-    bw = svgWidth;
+    buildingRects.push({ x: x + pw, y, w: svgWidth - pw, h: svgHeight });
+  } else if (bp.parkingRotation === 1) {
+    px = x + svgWidth * (1 - parkingFraction);
+    py = y;
+    pw = svgWidth * parkingFraction;
+    ph = svgHeight;
+    buildingRects.push({ x, y, w: svgWidth - pw, h: svgHeight });
+  } else if (bp.parkingRotation === 0) {
+    py = y;
+    px = x;
     pw = svgWidth;
-    bh = buildingSize;
-    ph = parkingSize;
-    if (bp.entryEdge === 0) {
-      px = x;
-      py = y;
-      bx = x;
-      by = y + parkingSize;
-    } else {
-      bx = x;
-      by = y;
-      px = x;
-      py = y + buildingSize;
-    }
+    ph = svgHeight * parkingFraction;
+    buildingRects.push({ x, y: y + ph, w: svgWidth, h: svgHeight - ph });
+  } else {
+    px = x;
+    ph = svgHeight * parkingFraction;
+    py = y + svgHeight - ph;
+    pw = svgWidth;
+    buildingRects.push({ x, y, w: svgWidth, h: svgHeight - ph });
   }
 
-  return { x, y, svgWidth, svgHeight, bx, by, bw, bh, px, py, pw, ph };
+  const demandBounds = buildingRects.reduce((best, rect) =>
+    rect.w * rect.h > best.w * best.h ? rect : best,
+  );
+
+  return {
+    x,
+    y,
+    svgWidth,
+    svgHeight,
+    bx: demandBounds.x,
+    by: demandBounds.y,
+    bw: demandBounds.w,
+    bh: demandBounds.h,
+    px,
+    py,
+    pw,
+    ph,
+    buildingRects,
+    demandBounds,
+  };
 }
 
 export function renderBusinessPark(bp: BusinessPark): void {
@@ -196,8 +230,13 @@ function initRenderState(
   rs.parkOriginY = l.py;
   rs.parkLotW = l.pw;
   rs.parkLotH = l.ph;
-  rs.buildingW = l.bw;
-  rs.buildingH = l.bh;
+  rs.parkX = l.x;
+  rs.parkY = l.y;
+  rs.parkW = l.svgWidth;
+  rs.parkH = l.svgHeight;
+  rs.buildingRects = l.buildingRects;
+  rs.buildingW = l.demandBounds.w;
+  rs.buildingH = l.demandBounds.h;
   rs.prevProgress = 0;
   rs.prevDemand = 0;
   rs.demandDirty = false;
@@ -223,22 +262,24 @@ function addGrassBackground(l: ParkLayout): void {
 }
 
 function addBuildingShadow(l: ParkLayout): void {
-  const shadow = createSvgElement("rect");
-  shadow.setAttribute("width", String(l.bw));
-  shadow.setAttribute("height", String(l.bh));
-  shadow.setAttribute("rx", String(roundness));
-  shadow.setAttribute("fill", colors.black);
-  shadow.setAttribute("stroke", "none");
-  shadow.style.transform = `translate(${l.bx}px,${l.by}px)`;
-  shadow.style.opacity = "0";
-  shadow.style.willChange = "opacity, transform";
-  shadow.style.transition = "opacity .4s, transform .6s";
-  houseShadowLayer.append(shadow);
-  setTimeout(() => {
-    shadow.style.opacity = "1";
-    shadow.style.transform = `translate(${l.bx + 0.8}px,${l.by + 0.8}px)`;
-  }, 800);
-  setTimeout(() => (shadow.style.willChange = ""), 1500);
+  for (const rect of l.buildingRects) {
+    const shadow = createSvgElement("rect");
+    shadow.setAttribute("width", String(rect.w));
+    shadow.setAttribute("height", String(rect.h));
+    shadow.setAttribute("rx", String(roundness));
+    shadow.setAttribute("fill", colors.black);
+    shadow.setAttribute("stroke", "none");
+    shadow.style.transform = `translate(${rect.x}px,${rect.y}px)`;
+    shadow.style.opacity = "0";
+    shadow.style.willChange = "opacity, transform";
+    shadow.style.transition = "opacity .4s, transform .6s";
+    houseShadowLayer.append(shadow);
+    setTimeout(() => {
+      shadow.style.opacity = "1";
+      shadow.style.transform = `translate(${rect.x + 0.8}px,${rect.y + 0.8}px)`;
+    }, 800);
+    setTimeout(() => (shadow.style.willChange = ""), 1500);
+  }
 }
 
 function addBuilding(
@@ -247,15 +288,18 @@ function addBuilding(
   l: ParkLayout,
 ): void {
   rs.buildingSvg = createSvgElement("g");
-  rs.buildingSvg.style.transform = `translate(${l.bx}px,${l.by}px)`;
   houseLayer.append(rs.buildingSvg);
 
-  if (bp.types.length > 1) {
-    addSplitRoof(rs.buildingSvg, bp.types, l);
-  } else {
+  for (const rect of l.buildingRects) {
+    if (bp.types.length > 1) {
+      addSplitRoof(rs.buildingSvg, bp.types, rect);
+      continue;
+    }
     const roof = createSvgElement("rect");
-    roof.setAttribute("width", String(l.bw));
-    roof.setAttribute("height", String(l.bh));
+    roof.setAttribute("x", String(rect.x));
+    roof.setAttribute("y", String(rect.y));
+    roof.setAttribute("width", String(rect.w));
+    roof.setAttribute("height", String(rect.h));
     roof.setAttribute("rx", String(roundness));
     roof.setAttribute("fill", bp.borderColor);
     rs.buildingSvg.append(roof);
@@ -265,18 +309,24 @@ function addBuilding(
 function addSplitRoof(
   parent: SVGGElement,
   types: string[],
-  l: ParkLayout,
+  bounds: LayoutRect,
 ): void {
   const defs = createSvgElement("defs");
   const clipA = createSvgElement("clipPath");
-  clipA.id = `rc-a-${l.bx | 0}-${l.by | 0}`;
+  clipA.id = `rc-a-${bounds.x | 0}-${bounds.y | 0}-${bounds.w | 0}`;
   const polyA = createSvgElement("polygon");
-  polyA.setAttribute("points", `0,0 ${l.bw},0 0,${l.bh}`);
+  polyA.setAttribute(
+    "points",
+    `${bounds.x},${bounds.y} ${bounds.x + bounds.w},${bounds.y} ${bounds.x},${bounds.y + bounds.h}`,
+  );
   clipA.append(polyA);
   const clipB = createSvgElement("clipPath");
-  clipB.id = `rc-b-${l.bx | 0}-${l.by | 0}`;
+  clipB.id = `rc-b-${bounds.x | 0}-${bounds.y | 0}-${bounds.w | 0}`;
   const polyB = createSvgElement("polygon");
-  polyB.setAttribute("points", `${l.bw},0 ${l.bw},${l.bh} 0,${l.bh}`);
+  polyB.setAttribute(
+    "points",
+    `${bounds.x + bounds.w},${bounds.y} ${bounds.x + bounds.w},${bounds.y + bounds.h} ${bounds.x},${bounds.y + bounds.h}`,
+  );
   clipB.append(polyB);
   defs.append(clipA, clipB);
   parent.append(defs);
@@ -285,13 +335,15 @@ function addSplitRoof(
     [types[0]!, clipA],
     [types[1]!, clipB],
   ] as const) {
-    const rect = createSvgElement("rect");
-    rect.setAttribute("width", String(l.bw));
-    rect.setAttribute("height", String(l.bh));
-    rect.setAttribute("rx", String(roundness));
-    rect.setAttribute("fill", color);
-    rect.setAttribute("clip-path", `url(#${clip.id})`);
-    parent.append(rect);
+    const roof = createSvgElement("rect");
+    roof.setAttribute("x", String(bounds.x));
+    roof.setAttribute("y", String(bounds.y));
+    roof.setAttribute("width", String(bounds.w));
+    roof.setAttribute("height", String(bounds.h));
+    roof.setAttribute("rx", String(roundness));
+    roof.setAttribute("fill", color);
+    roof.setAttribute("clip-path", `url(#${clip.id})`);
+    parent.append(roof);
   }
 }
 
@@ -400,13 +452,220 @@ function addStatusPins(rs: BusinessParkRenderState, l: ParkLayout): void {
 
   // Demand pins — small icons showing count, centered on building
   rs.demandSvg = createSvgElement("g");
-  rs.demandSvg.style.transform = `translate(${l.bx + l.bw / 2}px, ${l.by + l.bh / 2}px)`;
+  rs.demandSvg.style.transform = `translate(${l.demandBounds.x + l.demandBounds.w / 2}px, ${l.demandBounds.y + l.demandBounds.h / 2}px)`;
   pinLayer.append(rs.demandSvg);
 }
 
+const mapParkPoint = (
+  rs: BusinessParkRenderState,
+  bp: BusinessPark,
+  nx: number,
+  ny: number,
+): Pixel => {
+  const x = rs.parkOriginX + parkingInset;
+  const y = rs.parkOriginY + parkingInset;
+  const w = rs.parkLotW - parkingInset * 2;
+  const h = rs.parkLotH - parkingInset * 2;
+  if (bp.parkingRotation === 1)
+    return { x: x + (1 - ny) * w, y: y + nx * h } as Pixel;
+  if (bp.parkingRotation === 2)
+    return { x: x + (1 - nx) * w, y: y + (1 - ny) * h } as Pixel;
+  if (bp.parkingRotation === 3)
+    return { x: x + ny * w, y: y + (1 - nx) * h } as Pixel;
+  return { x: x + nx * w, y: y + ny * h } as Pixel;
+};
+
+const addMappedDivider = (
+  parent: SVGGElement,
+  rs: BusinessParkRenderState,
+  bp: BusinessPark,
+  x: number,
+  y1: number,
+  y2: number,
+): void => {
+  const from = mapParkPoint(rs, bp, x, y1);
+  const to = mapParkPoint(rs, bp, x, y2);
+  const divider = createSvgElement("line");
+  divider.setAttribute("x1", String(from.x));
+  divider.setAttribute("y1", String(from.y));
+  divider.setAttribute("x2", String(to.x));
+  divider.setAttribute("y2", String(to.y));
+  divider.setAttribute("stroke", "#fff9");
+  divider.setAttribute("stroke-width", "0.3");
+  divider.setAttribute("stroke-linecap", "round");
+  parent.append(divider);
+};
+
+interface ParkLocalPoint {
+  x: number;
+  y: number;
+}
+
+const sameLocalPoint = (a: ParkLocalPoint, b: ParkLocalPoint): boolean =>
+  (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < 0.000001;
+
+const compactLocalRoute = (points: ParkLocalPoint[]): ParkLocalPoint[] => {
+  const route: ParkLocalPoint[] = [];
+  for (const point of points) {
+    const last = route.at(-1);
+    if (!last || !sameLocalPoint(last, point)) route.push(point);
+  }
+  return route;
+};
+
+const mapLocalRoute = (
+  rs: BusinessParkRenderState,
+  bp: BusinessPark,
+  route: ParkLocalPoint[],
+): Pixel[] => route.map((point) => mapParkPoint(rs, bp, point.x, point.y));
+
+const localRouteDistance = (route: ParkLocalPoint[]): number => {
+  let distance = 0;
+  for (let i = 1; i < route.length; i++) {
+    const from = route[i - 1]!;
+    const to = route[i]!;
+    distance += Math.hypot(to.x - from.x, to.y - from.y);
+  }
+  return distance;
+};
+
+const slotCentersFor = (
+  bayCount: number,
+  entryFromRight: boolean,
+): number[] => {
+  const first = entryFromRight ? 0.22 : 0.46;
+  const last = entryFromRight ? 0.54 : 0.78;
+  if (bayCount === 1) return [(first + last) / 2];
+  return Array.from(
+    { length: bayCount },
+    (_, i) => first + ((last - first) * i) / (bayCount - 1),
+  );
+};
+
+const roadDocksFor = (
+  variant: number,
+): { arrival: ParkLocalPoint; departure: ParkLocalPoint } => {
+  const docks = [
+    {
+      arrival: { x: 0.19, y: 0.06 },
+      departure: { x: 0.34, y: 0.06 },
+    },
+    {
+      arrival: { x: 0.66, y: 0.06 },
+      departure: { x: 0.81, y: 0.06 },
+    },
+    {
+      arrival: { x: 0.06, y: 0.56 },
+      departure: { x: 0.06, y: 0.4 },
+    },
+    {
+      arrival: { x: 0.94, y: 0.4 },
+      departure: { x: 0.94, y: 0.56 },
+    },
+  ];
+  return docks[variant] ?? docks[0]!;
+};
+
+const entersSlotFromTop = (variant: number): boolean => variant === 3;
+
+const entryRouteFor = (
+  variant: number,
+  dock: ParkLocalPoint,
+  entryLane: ParkLocalPoint,
+  entryDoor: ParkLocalPoint,
+  center: ParkLocalPoint,
+): ParkLocalPoint[] => {
+  const sx = entryLane.x;
+  const routes: ParkLocalPoint[][] = [
+    [
+      dock,
+      { x: 0.32, y: 0.16 },
+      { x: 0.72, y: 0.24 },
+      { x: 0.82, y: 0.62 },
+      { x: Math.max(0.24, sx - 0.1), y: 0.78 },
+      entryLane,
+      entryDoor,
+      center,
+    ],
+    [
+      dock,
+      { x: 0.76, y: 0.16 },
+      { x: 0.36, y: 0.24 },
+      { x: 0.24, y: 0.62 },
+      { x: Math.min(0.76, sx + 0.1), y: 0.78 },
+      entryLane,
+      entryDoor,
+      center,
+    ],
+    [
+      dock,
+      { x: 0.18, y: 0.7 },
+      { x: Math.max(0.22, sx - 0.1), y: 0.8 },
+      entryLane,
+      entryDoor,
+      center,
+    ],
+    [
+      dock,
+      { x: 0.82, y: 0.24 },
+      { x: Math.min(0.78, sx + 0.1), y: 0.2 },
+      entryLane,
+      entryDoor,
+      center,
+    ],
+  ];
+  return compactLocalRoute(routes[variant] ?? routes[0]!);
+};
+
+const exitRouteFor = (
+  variant: number,
+  exitLane: ParkLocalPoint,
+  exitDoor: ParkLocalPoint,
+  departureDock: ParkLocalPoint,
+): ParkLocalPoint[] => {
+  const sx = exitLane.x;
+  const lateralSign = Math.sign(departureDock.x - sx) || 1;
+  const topLateral = Math.max(0.22, Math.min(0.78, sx + lateralSign * 0.1));
+  const routes: ParkLocalPoint[][] = [
+    [
+      exitDoor,
+      exitLane,
+      { x: sx, y: 0.14 },
+      { x: topLateral, y: 0.13 },
+      { x: departureDock.x, y: 0.09 },
+      departureDock,
+    ],
+    [
+      exitDoor,
+      exitLane,
+      { x: sx, y: 0.14 },
+      { x: topLateral, y: 0.13 },
+      { x: departureDock.x, y: 0.09 },
+      departureDock,
+    ],
+    [
+      exitDoor,
+      exitLane,
+      { x: sx, y: 0.14 },
+      { x: Math.max(0.18, sx - 0.12), y: 0.18 },
+      { x: 0.14, y: 0.3 },
+      departureDock,
+    ],
+    [
+      exitDoor,
+      exitLane,
+      { x: sx, y: 0.86 },
+      { x: Math.min(0.82, sx + 0.12), y: 0.82 },
+      { x: 0.86, y: 0.68 },
+      departureDock,
+    ],
+  ];
+  return compactLocalRoute(routes[variant] ?? routes[0]!);
+};
+
 export function drawParkingLot(bp: BusinessPark): BayGeometry {
   const rs = requireRenderState(bp);
-  const inset = 0.8;
+  const inset = parkingInset;
   const lotW = rs.parkLotW - inset * 2;
   const lotH = rs.parkLotH - inset * 2;
 
@@ -419,7 +678,6 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
   gridBlockLayer.append(rs.parkingLotSvg);
 
   rs.parkingMarkingSvg = createSvgElement("g");
-  rs.parkingMarkingSvg.style.transform = rs.parkingLotSvg.style.transform;
   parkingMarkingLayer.append(rs.parkingMarkingSvg);
 
   // Asphalt pad
@@ -430,69 +688,104 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
   asphalt.setAttribute("fill", colors.road);
   rs.parkingLotSvg.append(asphalt);
 
-  // Car-proportioned bay markings (car = 1.4×2.2)
-  const lc = "#fff8";
-  const lw = 0.25;
   const bayCount = bp.parkingCapacity;
-  const bayW = 2.0; // slightly wider than car
-  const bayD = 3.0; // slightly deeper than car length
-  const isWide = lotW > lotH;
 
-  // Axis-neutral layout: main = along bays, cross = depth into lot
-  const mainSize = isWide ? lotW : lotH;
-  const crossSize = isWide ? lotH : lotW;
-  const clusterMain = bayW * bayCount;
-  const startMain = (mainSize - clusterMain) / 2;
-  const backCross = bp.entryEdge === 0 || bp.entryEdge === 3 ? crossSize : 0;
-  const dir = bp.entryEdge === 0 || bp.entryEdge === 3 ? -1 : 1;
+  const variant = bp.parkingVariant % 4;
+  const entryFromRight = variant === 1 || variant === 3;
+  const slotCenters = slotCentersFor(bayCount, entryFromRight);
+  const slotTop = 0.31;
+  const slotBottom = 0.69;
+  const docks = roadDocksFor(variant);
+  const drivewayLocal = docks.arrival;
+  const departureDrivewayLocal = docks.departure;
 
-  const toXY = (main: number, cross: number): [number, number] =>
-    isWide ? [main, cross] : [cross, main];
-
-  // Back wall spanning bay cluster
-  const [wx1, wy1] = toXY(startMain, backCross);
-  const [wx2, wy2] = toXY(startMain + clusterMain, backCross);
-  const wall = createSvgElement("line");
-  wall.setAttribute("x1", String(wx1));
-  wall.setAttribute("y1", String(wy1));
-  wall.setAttribute("x2", String(wx2));
-  wall.setAttribute("y2", String(wy2));
-  wall.setAttribute("stroke", lc);
-  wall.setAttribute("stroke-width", String(lw));
-  rs.parkingMarkingSvg.append(wall);
-
-  // Divider lines from back wall into driving lane
-  for (let i = 0; i <= bayCount; i++) {
-    const m = startMain + bayW * i;
-    const [lx1, ly1] = toXY(m, backCross);
-    const [lx2, ly2] = toXY(m, backCross + bayD * dir);
-    const line = createSvgElement("line");
-    line.setAttribute("x1", String(lx1));
-    line.setAttribute("y1", String(ly1));
-    line.setAttribute("x2", String(lx2));
-    line.setAttribute("y2", String(ly2));
-    line.setAttribute("stroke", lc);
-    line.setAttribute("stroke-width", String(lw));
-    rs.parkingMarkingSvg.append(line);
-  }
-
-  // Compute bay centers and lane waypoints in SVG-global coords
-  const gx = rs.parkOriginX + inset;
-  const gy = rs.parkOriginY + inset;
-  const laneCross =
-    bp.entryEdge === 0 || bp.entryEdge === 3
-      ? (crossSize - bayD) / 2
-      : bayD + (crossSize - bayD) / 2;
   const bayCenters: Pixel[] = [];
   const bayLanePoints: Pixel[] = [];
-  for (let i = 0; i < bayCount; i++) {
-    const m = startMain + bayW * i + bayW / 2;
-    const [cx, cy] = toXY(m, backCross + (bayD / 2) * dir);
-    const [lx, ly] = toXY(m, laneCross);
-    bayCenters.push({ x: gx + cx, y: gy + cy } as Pixel);
-    bayLanePoints.push({ x: gx + lx, y: gy + ly } as Pixel);
+  const bayExitLanePoints: Pixel[] = [];
+  const bayReturnLanePoints: Pixel[] = [];
+  const bayEntryRails: Pixel[][] = [];
+  const bayExitRails: Pixel[][] = [];
+  const bayEntryDistances: number[] = [];
+
+  const slotStep =
+    slotCenters.length > 1 ? slotCenters[1]! - slotCenters[0]! : 0.16;
+  const markerMid = (slotTop + slotBottom) / 2;
+  const markerHalfLength = ((slotBottom - slotTop) * 0.8) / 2;
+  for (let i = 0; i <= slotCenters.length; i++) {
+    const dividerX = slotCenters[0]! - slotStep / 2 + slotStep * i;
+    addMappedDivider(
+      rs.parkingMarkingSvg,
+      rs,
+      bp,
+      dividerX,
+      markerMid - markerHalfLength,
+      markerMid + markerHalfLength,
+    );
   }
-  return { bayCenters, bayLanePoints };
+
+  for (let i = 0; i < bayCount; i++) {
+    const sx = slotCenters[i]!;
+    const centerLocal = { x: sx, y: (slotTop + slotBottom) / 2 };
+    const center = mapParkPoint(rs, bp, sx, (slotTop + slotBottom) / 2);
+
+    const topPoint = { x: sx, y: 0.2 };
+    const bottomPoint = { x: sx, y: 0.8 };
+    const entersFromTop = entersSlotFromTop(variant);
+    const entryPoint = entersFromTop ? topPoint : bottomPoint;
+    const exitPoint = entersFromTop ? bottomPoint : topPoint;
+    const entryDoor = {
+      x: sx,
+      y: entersFromTop ? slotTop - 0.028 : slotBottom + 0.028,
+    };
+    const exitDoor = {
+      x: sx,
+      y: entersFromTop ? slotBottom + 0.028 : slotTop - 0.028,
+    };
+
+    bayCenters.push(center);
+    bayLanePoints.push(mapParkPoint(rs, bp, entryPoint.x, entryPoint.y));
+    bayExitLanePoints.push(mapParkPoint(rs, bp, exitPoint.x, exitPoint.y));
+    bayReturnLanePoints.push(
+      mapParkPoint(rs, bp, drivewayLocal.x, drivewayLocal.y),
+    );
+    const entryRoute = entryRouteFor(
+      variant,
+      drivewayLocal,
+      entryPoint,
+      entryDoor,
+      centerLocal,
+    );
+    const exitRoute = exitRouteFor(
+      variant,
+      exitPoint,
+      exitDoor,
+      departureDrivewayLocal,
+    );
+    bayEntryDistances.push(localRouteDistance(entryRoute));
+
+    bayEntryRails.push(mapLocalRoute(rs, bp, entryRoute));
+    bayExitRails.push(mapLocalRoute(rs, bp, exitRoute));
+  }
+
+  const drivewayPoint = mapParkPoint(rs, bp, drivewayLocal.x, drivewayLocal.y);
+  const departureDrivewayPoint = mapParkPoint(
+    rs,
+    bp,
+    departureDrivewayLocal.x,
+    departureDrivewayLocal.y,
+  );
+
+  return {
+    bayCenters,
+    bayLanePoints,
+    bayExitLanePoints,
+    bayReturnLanePoints,
+    bayEntryRails,
+    bayExitRails,
+    bayEntryDistances,
+    drivewayPoint,
+    departureDrivewayPoint,
+  };
 }
 
 export function updateDemandDisplay(bp: BusinessPark): void {

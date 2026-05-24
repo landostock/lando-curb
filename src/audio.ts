@@ -454,7 +454,7 @@ export const initAudio = (): void => {
     window.addEventListener("keydown", unlockOnce, { capture: true });
     window.addEventListener("keydown", (event) => {
       if (event.key.toLowerCase() === "m") toggleMuted();
-      if (event.key.toLowerCase() === "s") playNextMusicTrack();
+      if (event.key.toLowerCase() === "n") playNextMusicTrack();
     });
   }
 

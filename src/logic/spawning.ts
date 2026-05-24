@@ -299,6 +299,8 @@ export interface ParkProps {
   relativePathPoints: Array<Point & { locked: boolean }>;
   delay: number;
   parkingCapacity: number;
+  parkingRotation?: number;
+  parkingVariant?: number;
   silentAppearChime?: boolean;
 }
 
@@ -415,37 +417,61 @@ const pickExistingTypeForExpansion = (): ParkTypeConfig | undefined => {
 
 // ─── Park shape ──────────────────────────────────────────────────────────────
 
-/** Compute locked inside + outside path points for a park of `width`×`height` with the
- *  entrance on `edge` (0=top, 1=right, 2=bottom, 3=left). */
-const pickEntryPoints = (
-  width: number,
-  height: number,
-  edge: number,
+const rotateParkPoint = (point: Point, turns: number): Point => {
+  let x = point.x,
+    y = point.y;
+  for (let i = 0; i < turns; i++) {
+    [x, y] = [1 - y, x];
+  }
+  return { x, y };
+};
+
+const variantEntryPoints = (
+  rotation: number,
+  variant: number,
 ): Array<Point & { locked: boolean }> => {
-  const vertical = edge === 0 || edge === 2;
-  const along = Math.floor(Math.random() * (vertical ? width : height));
-  const insideX = edge === 1 ? width - 1 : edge === 3 ? 0 : along;
-  const insideY = edge === 2 ? height - 1 : edge === 0 ? 0 : along;
-  const dx = edge === 1 ? 1 : edge === 3 ? -1 : 0;
-  const dy = edge === 2 ? 1 : edge === 0 ? -1 : 0;
-  return [
-    { x: insideX, y: insideY, locked: true },
-    { x: insideX + dx, y: insideY + dy, locked: true },
-  ];
+  const canonical = [
+    [
+      { x: 0, y: 0 },
+      { x: 0, y: -1 },
+    ],
+    [
+      { x: 1, y: 0 },
+      { x: 1, y: -1 },
+    ],
+    [
+      { x: 0, y: 0 },
+      { x: -1, y: 0 },
+    ],
+    [
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+    ],
+  ][variant]!;
+
+  return canonical.map((point) => ({
+    ...rotateParkPoint(point, rotation),
+    locked: true,
+  }));
 };
 
 interface ParkShape {
   width: number;
   height: number;
+  parkingRotation: number;
+  parkingVariant: number;
   relativePathPoints: Array<Point & { locked: boolean }>;
 }
 
 const parkShape = (): ParkShape => {
-  const edge = Math.floor(Math.random() * 4);
+  const rotation = Math.floor(Math.random() * 4);
+  const parkingVariant = Math.floor(Math.random() * 4);
   return {
     width: 2,
     height: 2,
-    relativePathPoints: pickEntryPoints(2, 2, edge),
+    parkingRotation: rotation,
+    parkingVariant,
+    relativePathPoints: variantEntryPoints(rotation, parkingVariant),
   };
 };
 
@@ -506,6 +532,8 @@ const placePark = ({
     relativePathPoints: shape.relativePathPoints,
     delay,
     parkingCapacity,
+    parkingRotation: shape.parkingRotation,
+    parkingVariant: shape.parkingVariant,
     silentAppearChime,
   });
   pruneTreesUnderNewestPark();
