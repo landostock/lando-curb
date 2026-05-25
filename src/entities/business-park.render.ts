@@ -566,101 +566,159 @@ const roadDocksFor = (
   return docks[variant] ?? docks[0]!;
 };
 
-const entersSlotFromTop = (variant: number): boolean => variant === 3;
+type LoopSide = "top" | "left" | "bottom" | "right";
 
-const entryRouteFor = (
-  variant: number,
-  dock: ParkLocalPoint,
-  entryLane: ParkLocalPoint,
-  entryDoor: ParkLocalPoint,
-  center: ParkLocalPoint,
-): ParkLocalPoint[] => {
-  const sx = entryLane.x;
-  const routes: ParkLocalPoint[][] = [
-    [
-      dock,
-      { x: 0.32, y: 0.16 },
-      { x: 0.72, y: 0.24 },
-      { x: 0.82, y: 0.62 },
-      { x: Math.max(0.24, sx - 0.1), y: 0.78 },
-      entryLane,
-      entryDoor,
-      center,
-    ],
-    [
-      dock,
-      { x: 0.76, y: 0.16 },
-      { x: 0.36, y: 0.24 },
-      { x: 0.24, y: 0.62 },
-      { x: Math.min(0.76, sx + 0.1), y: 0.78 },
-      entryLane,
-      entryDoor,
-      center,
-    ],
-    [
-      dock,
-      { x: 0.18, y: 0.7 },
-      { x: Math.max(0.22, sx - 0.1), y: 0.8 },
-      entryLane,
-      entryDoor,
-      center,
-    ],
-    [
-      dock,
-      { x: 0.82, y: 0.24 },
-      { x: Math.min(0.78, sx + 0.1), y: 0.2 },
-      entryLane,
-      entryDoor,
-      center,
-    ],
-  ];
-  return compactLocalRoute(routes[variant] ?? routes[0]!);
+interface LoopPoint extends ParkLocalPoint {
+  side: LoopSide;
+}
+
+interface ParkingLoopRoute {
+  entry: ParkLocalPoint[];
+  exit: ParkLocalPoint[];
+}
+
+const loopBounds = {
+  top: 0.23,
+  left: 0.11,
+  bottom: 0.77,
+  right: 0.89,
 };
 
-const exitRouteFor = (
+const slotDoorInset = 0.028;
+
+const clampLoopX = (x: number): number =>
+  Math.min(loopBounds.right, Math.max(loopBounds.left, x));
+
+const clampLoopY = (y: number): number =>
+  Math.min(loopBounds.bottom, Math.max(loopBounds.top, y));
+
+const loopProgress = ({ side, x, y }: LoopPoint): number => {
+  const topLength = loopBounds.right - loopBounds.left;
+  const sideLength = loopBounds.bottom - loopBounds.top;
+  if (side === "top") return loopBounds.right - x;
+  if (side === "left") return topLength + y - loopBounds.top;
+  if (side === "bottom") return topLength + sideLength + x - loopBounds.left;
+  return topLength * 2 + sideLength + loopBounds.bottom - y;
+};
+
+const loopCornerAfter = (side: LoopSide): LoopPoint => {
+  if (side === "top")
+    return { side: "left", x: loopBounds.left, y: loopBounds.top };
+  if (side === "left")
+    return { side: "bottom", x: loopBounds.left, y: loopBounds.bottom };
+  if (side === "bottom")
+    return { side: "right", x: loopBounds.right, y: loopBounds.bottom };
+  return { side: "top", x: loopBounds.right, y: loopBounds.top };
+};
+
+const loopCornerBefore = (side: LoopSide): LoopPoint => {
+  if (side === "top")
+    return { side: "right", x: loopBounds.right, y: loopBounds.top };
+  if (side === "right")
+    return { side: "bottom", x: loopBounds.right, y: loopBounds.bottom };
+  if (side === "bottom")
+    return { side: "left", x: loopBounds.left, y: loopBounds.bottom };
+  return { side: "top", x: loopBounds.left, y: loopBounds.top };
+};
+
+const loopPerimeter = (): number =>
+  2 *
+  (loopBounds.right -
+    loopBounds.left +
+    loopBounds.bottom -
+    loopBounds.top);
+
+const loopPath = (
+  from: LoopPoint,
+  to: LoopPoint,
+  clockwise = false,
+): ParkLocalPoint[] => {
+  const route: LoopPoint[] = [from];
+  let current = from;
+
+  for (let guard = 0; guard < 5; guard++) {
+    if (current.side === to.side) break;
+    const corner = clockwise
+      ? loopCornerBefore(current.side)
+      : loopCornerAfter(current.side);
+    route.push(corner);
+    current = corner;
+  }
+
+  route.push(to);
+  return compactLocalRoute(route);
+};
+
+const shortestLoopPath = (from: LoopPoint, to: LoopPoint): ParkLocalPoint[] => {
+  const clockwiseDistance =
+    (loopProgress(from) - loopProgress(to) + loopPerimeter()) %
+    loopPerimeter();
+  const counterClockwiseDistance =
+    (loopProgress(to) - loopProgress(from) + loopPerimeter()) %
+    loopPerimeter();
+  return loopPath(from, to, clockwiseDistance < counterClockwiseDistance);
+};
+
+const loopDockFor = (variant: number, dock: ParkLocalPoint): LoopPoint => {
+  if (variant === 2)
+    return {
+      side: "left",
+      x: loopBounds.left,
+      y: clampLoopY(dock.y),
+    };
+  if (variant === 3)
+    return {
+      side: "right",
+      x: loopBounds.right,
+      y: clampLoopY(dock.y),
+    };
+  return {
+    side: "top",
+    x: clampLoopX(dock.x),
+    y: loopBounds.top,
+  };
+};
+
+const laneLoopPoint = (lane: ParkLocalPoint): LoopPoint => {
+  const topDistance = Math.abs(lane.y - loopBounds.top);
+  const bottomDistance = Math.abs(lane.y - loopBounds.bottom);
+  if (topDistance < bottomDistance)
+    return { side: "top", x: clampLoopX(lane.x), y: loopBounds.top };
+  return { side: "bottom", x: clampLoopX(lane.x), y: loopBounds.bottom };
+};
+
+const entersSlotFromTop = (variant: number): boolean => variant !== 2;
+
+const parkingLoopRouteFor = (
   variant: number,
+  arrivalDock: ParkLocalPoint,
+  departureDock: ParkLocalPoint,
+  entryLane: ParkLocalPoint,
+  entryDoor: ParkLocalPoint,
   exitLane: ParkLocalPoint,
   exitDoor: ParkLocalPoint,
-  departureDock: ParkLocalPoint,
-): ParkLocalPoint[] => {
-  const sx = exitLane.x;
-  const lateralSign = Math.sign(departureDock.x - sx) || 1;
-  const topLateral = Math.max(0.22, Math.min(0.78, sx + lateralSign * 0.1));
-  const routes: ParkLocalPoint[][] = [
-    [
+  center: ParkLocalPoint,
+): ParkingLoopRoute => {
+  const entryLoopStart = loopDockFor(variant, arrivalDock);
+  const entryLoopEnd = laneLoopPoint(entryLane);
+  const exitLoopStart = laneLoopPoint(exitLane);
+  const exitLoopEnd = loopDockFor(variant, departureDock);
+  const entryLoop = shortestLoopPath(entryLoopStart, entryLoopEnd);
+  const exitLoop = shortestLoopPath(exitLoopStart, exitLoopEnd);
+
+  return {
+    entry: compactLocalRoute([
+      arrivalDock,
+      ...entryLoop,
+      entryDoor,
+      center,
+    ]),
+    exit: compactLocalRoute([
       exitDoor,
-      exitLane,
-      { x: sx, y: 0.14 },
-      { x: topLateral, y: 0.13 },
-      { x: departureDock.x, y: 0.09 },
+      ...exitLoop,
       departureDock,
-    ],
-    [
-      exitDoor,
-      exitLane,
-      { x: sx, y: 0.14 },
-      { x: topLateral, y: 0.13 },
-      { x: departureDock.x, y: 0.09 },
-      departureDock,
-    ],
-    [
-      exitDoor,
-      exitLane,
-      { x: sx, y: 0.14 },
-      { x: Math.max(0.18, sx - 0.12), y: 0.18 },
-      { x: 0.14, y: 0.3 },
-      departureDock,
-    ],
-    [
-      exitDoor,
-      exitLane,
-      { x: sx, y: 0.86 },
-      { x: Math.min(0.82, sx + 0.12), y: 0.82 },
-      { x: 0.86, y: 0.68 },
-      departureDock,
-    ],
-  ];
-  return compactLocalRoute(routes[variant] ?? routes[0]!);
+    ]),
+  };
 };
 
 export function drawParkingLot(bp: BusinessPark): BayGeometry {
@@ -728,18 +786,18 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
     const centerLocal = { x: sx, y: (slotTop + slotBottom) / 2 };
     const center = mapParkPoint(rs, bp, sx, (slotTop + slotBottom) / 2);
 
-    const topPoint = { x: sx, y: 0.2 };
-    const bottomPoint = { x: sx, y: 0.8 };
+    const topPoint = { x: sx, y: loopBounds.top };
+    const bottomPoint = { x: sx, y: loopBounds.bottom };
     const entersFromTop = entersSlotFromTop(variant);
     const entryPoint = entersFromTop ? topPoint : bottomPoint;
     const exitPoint = entersFromTop ? bottomPoint : topPoint;
     const entryDoor = {
       x: sx,
-      y: entersFromTop ? slotTop - 0.028 : slotBottom + 0.028,
+      y: entersFromTop ? slotTop - slotDoorInset : slotBottom + slotDoorInset,
     };
     const exitDoor = {
       x: sx,
-      y: entersFromTop ? slotBottom + 0.028 : slotTop - 0.028,
+      y: entersFromTop ? slotBottom + slotDoorInset : slotTop - slotDoorInset,
     };
 
     bayCenters.push(center);
@@ -748,23 +806,20 @@ export function drawParkingLot(bp: BusinessPark): BayGeometry {
     bayReturnLanePoints.push(
       mapParkPoint(rs, bp, drivewayLocal.x, drivewayLocal.y),
     );
-    const entryRoute = entryRouteFor(
+    const routes = parkingLoopRouteFor(
       variant,
       drivewayLocal,
+      departureDrivewayLocal,
       entryPoint,
       entryDoor,
-      centerLocal,
-    );
-    const exitRoute = exitRouteFor(
-      variant,
       exitPoint,
       exitDoor,
-      departureDrivewayLocal,
+      centerLocal,
     );
-    bayEntryDistances.push(localRouteDistance(entryRoute));
+    bayEntryDistances.push(localRouteDistance(routes.entry));
 
-    bayEntryRails.push(mapLocalRoute(rs, bp, entryRoute));
-    bayExitRails.push(mapLocalRoute(rs, bp, exitRoute));
+    bayEntryRails.push(mapLocalRoute(rs, bp, routes.entry));
+    bayExitRails.push(mapLocalRoute(rs, bp, routes.exit));
   }
 
   const drivewayPoint = mapParkPoint(rs, bp, drivewayLocal.x, drivewayLocal.y);

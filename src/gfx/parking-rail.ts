@@ -4,7 +4,8 @@ const BEZIER_STEPS = 18;
 const STRAIGHT_STEPS = 8;
 const MIN_POINT_DISTANCE = 0.08;
 const RAIL_SPACING = 0.09;
-const PATH_TENSION = 0.34;
+const CORNER_RADIUS = 0.42;
+const MIN_CORNER_LEG = 0.16;
 
 const lerp = (rail: Pixel[], from: Pixel, to: Pixel, steps: number): void => {
   for (let i = 1; i <= steps; i++) {
@@ -72,6 +73,32 @@ const resampleRail = (rail: Pixel[], spacing = RAIL_SPACING): Pixel[] => {
   return sampled;
 };
 
+const appendCubic = (
+  rail: Pixel[],
+  from: Pixel,
+  c1: Pixel,
+  c2: Pixel,
+  to: Pixel,
+  steps: number,
+): void => {
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const mt = 1 - t;
+    rail.push({
+      x:
+        mt * mt * mt * from.x +
+        3 * mt * mt * t * c1.x +
+        3 * mt * t * t * c2.x +
+        t * t * t * to.x,
+      y:
+        mt * mt * mt * from.y +
+        3 * mt * mt * t * c1.y +
+        3 * mt * t * t * c2.y +
+        t * t * t * to.y,
+    } as Pixel);
+  }
+};
+
 export function computeParkingRail(
   start: Pixel,
   corner: Pixel,
@@ -122,43 +149,64 @@ export function computeParkingPathRail(points: Pixel[]): Pixel[] {
   if (cleanPoints.length <= 2) return resampleRail([...cleanPoints]);
 
   const rail: Pixel[] = [cleanPoints[0]!];
+  let cursor = cleanPoints[0]!;
 
-  for (let i = 0; i < cleanPoints.length - 1; i++) {
-    const p1 = cleanPoints[i]!;
-    const p2 = cleanPoints[i + 1]!;
-    const p0 =
-      cleanPoints[i - 1] ??
-      ({
-        x: p1.x * 2 - p2.x,
-        y: p1.y * 2 - p2.y,
-      } as Pixel);
-    const p3 =
-      cleanPoints[i + 2] ??
-      ({
-        x: p2.x * 2 - p1.x,
-        y: p2.y * 2 - p1.y,
-      } as Pixel);
+  for (let i = 1; i < cleanPoints.length - 1; i++) {
+    const prev = cleanPoints[i - 1]!;
+    const corner = cleanPoints[i]!;
+    const next = cleanPoints[i + 1]!;
+    const inDx = corner.x - prev.x;
+    const inDy = corner.y - prev.y;
+    const outDx = next.x - corner.x;
+    const outDy = next.y - corner.y;
+    const inLen = Math.hypot(inDx, inDy);
+    const outLen = Math.hypot(outDx, outDy);
 
-    const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-    const steps = Math.max(12, Math.ceil(distance / (RAIL_SPACING * 0.75)));
-    for (let j = 1; j <= steps; j++) {
-      const t = j / steps;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      const h00 = 2 * t3 - 3 * t2 + 1;
-      const h10 = t3 - 2 * t2 + t;
-      const h01 = -2 * t3 + 3 * t2;
-      const h11 = t3 - t2;
-      const m1x = (p2.x - p0.x) * PATH_TENSION;
-      const m1y = (p2.y - p0.y) * PATH_TENSION;
-      const m2x = (p3.x - p1.x) * PATH_TENSION;
-      const m2y = (p3.y - p1.y) * PATH_TENSION;
-      rail.push({
-        x: h00 * p1.x + h10 * m1x + h01 * p2.x + h11 * m2x,
-        y: h00 * p1.y + h10 * m1y + h01 * p2.y + h11 * m2y,
-      } as Pixel);
+    if (inLen < MIN_CORNER_LEG || outLen < MIN_CORNER_LEG) {
+      lerp(rail, cursor, corner, STRAIGHT_STEPS);
+      cursor = corner;
+      continue;
     }
+
+    const inUx = inDx / inLen;
+    const inUy = inDy / inLen;
+    const outUx = outDx / outLen;
+    const outUy = outDy / outLen;
+    const radius = Math.min(CORNER_RADIUS, inLen * 0.48, outLen * 0.48);
+    const pre = {
+      x: corner.x - inUx * radius,
+      y: corner.y - inUy * radius,
+    } as Pixel;
+    const post = {
+      x: corner.x + outUx * radius,
+      y: corner.y + outUy * radius,
+    } as Pixel;
+
+    lerp(rail, cursor, pre, Math.max(2, Math.ceil(inLen / RAIL_SPACING)));
+    appendCubic(
+      rail,
+      pre,
+      {
+        x: pre.x + inUx * radius * 0.55,
+        y: pre.y + inUy * radius * 0.55,
+      } as Pixel,
+      {
+        x: post.x - outUx * radius * 0.55,
+        y: post.y - outUy * radius * 0.55,
+      } as Pixel,
+      post,
+      BEZIER_STEPS,
+    );
+    cursor = post;
   }
 
+  const end = cleanPoints.at(-1)!;
+  const finalDistance = Math.hypot(end.x - cursor.x, end.y - cursor.y);
+  lerp(
+    rail,
+    cursor,
+    end,
+    Math.max(2, Math.ceil(finalDistance / RAIL_SPACING)),
+  );
   return resampleRail(rail);
 }
