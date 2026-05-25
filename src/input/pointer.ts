@@ -1,5 +1,8 @@
 import { grid } from "../board";
-import { challengeDisablesPausedInteraction } from "../challenge";
+import {
+  challengeDisablesDelete,
+  challengeDisablesPausedInteraction,
+} from "../challenge";
 import { gameState } from "../game-flow";
 import { getBoardCell, isPastHalfwayInto } from "../gfx/coords";
 import { gridPointerLayer } from "../gfx/layers";
@@ -43,6 +46,9 @@ const DBLCLICK_PX2 = 20 * 20;
 const gameInputEnabled = (): boolean =>
   gameState.gameStarted &&
   (!challengeDisablesPausedInteraction() || !gameState.paused);
+
+const deleteModeLocked = (): boolean =>
+  gridRedState.locked && !challengeDisablesDelete();
 
 const cancelPointerInteraction = (): void => {
   gridHide();
@@ -165,7 +171,7 @@ const handlePointerdown = (event: PointerEvent): void => {
     return;
   }
 
-  if (event.buttons === 1 && !gridRedState.locked) {
+  if (event.buttons === 1 && !deleteModeLocked()) {
     gridShow();
     if (cellIsBlocked(cell) || cellInLake(cell)) return;
 
@@ -179,7 +185,7 @@ const handlePointerdown = (event: PointerEvent): void => {
     } else {
       pathDraw.onDown(cell);
     }
-  } else if (event.buttons === 2 || gridRedState.locked) {
+  } else if (event.buttons === 2 || deleteModeLocked()) {
     gridRedShow();
     removePathAtPointer(cell, pointerInRect);
     removeDragPrev = cell;
@@ -250,7 +256,7 @@ const handlePointermove = (event: PointerEvent): void => {
   const { cell, pointerInRect } = getCellFromEvent(event);
 
   // Removal mode (right-click or locked red grid)
-  if (event.buttons === 2 || (event.buttons === 1 && gridRedState.locked)) {
+  if (event.buttons === 2 || (event.buttons === 1 && deleteModeLocked())) {
     gridRedShow();
     removePath(cell, removeDragPrev ?? undefined);
     removeDragPrev = cell;

@@ -80,6 +80,7 @@ const startGame = (): void => {
 
 const selectMap = (map: MapGenerator): void => {
   gameState.currentMap = map;
+  resetDeleteMode();
 
   if (challengeStartModeSelected()) {
     clearActiveChallenges();
@@ -90,6 +91,7 @@ const selectMap = (map: MapGenerator): void => {
       onStart: () => {
         resetState();
         resetDeveloperMode();
+        resetDeleteMode();
         initDemandBudgets();
         resetDemandBudgets();
         resetSpawning();
@@ -127,6 +129,7 @@ const startNewGame = (): void => {
       resetState();
       applyChallengeStartRules();
       resetDeveloperMode();
+      resetDeleteMode();
       initDemandBudgets();
       resetDemandBudgets();
       resetSpawning();
@@ -196,6 +199,7 @@ const gameoverToMenu = (): void => {
   transitionGameoverToMenu(session.paths, () => {
     resetState();
     resetDeveloperMode();
+    resetDeleteMode();
     initDemandBudgets();
     resetDemandBudgets();
     resetSpawning();
