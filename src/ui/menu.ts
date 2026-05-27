@@ -13,7 +13,7 @@ import {
 import { colors } from "../gfx/colors";
 import { svgPxToDisplayPx } from "../gfx/coords";
 import { svgElement } from "../gfx/svg";
-import { createElement } from "../gfx/svg-utils";
+import { createElement, createSvgElement } from "../gfx/svg-utils";
 import {
   generateBerlinMap,
   generateOstholsteinMap,
@@ -368,10 +368,29 @@ const initChallengeModeControls = (): void => {
     border-radius: 50%;
     background: #fff;
     color: ${colors.ui};
-    font-size: 22px;
     pointer-events: all;
   `;
-  challengeCloseButton.innerText = "×";
+  const challengeCloseIcon = createSvgElement("svg");
+  challengeCloseIcon.setAttribute("viewBox", "0 0 24 24");
+  challengeCloseIcon.setAttribute("width", "22");
+  challengeCloseIcon.setAttribute("height", "22");
+  challengeCloseIcon.setAttribute("aria-hidden", "true");
+  challengeCloseIcon.setAttribute("fill", "none");
+  challengeCloseIcon.setAttribute("stroke", "currentColor");
+  challengeCloseIcon.setAttribute("stroke-width", "3");
+  challengeCloseIcon.setAttribute("stroke-linecap", "round");
+  const closeLineA = createSvgElement("line");
+  closeLineA.setAttribute("x1", "7");
+  closeLineA.setAttribute("y1", "7");
+  closeLineA.setAttribute("x2", "17");
+  closeLineA.setAttribute("y2", "17");
+  const closeLineB = createSvgElement("line");
+  closeLineB.setAttribute("x1", "17");
+  closeLineB.setAttribute("y1", "7");
+  closeLineB.setAttribute("x2", "7");
+  closeLineB.setAttribute("y2", "17");
+  challengeCloseIcon.append(closeLineA, closeLineB);
+  challengeCloseButton.replaceChildren(challengeCloseIcon);
   challengeCloseButton.setAttribute("aria-label", "Close challenge picker");
   challengeCloseButton.addEventListener("click", () => {
     setChallengePickerOpen(false);
