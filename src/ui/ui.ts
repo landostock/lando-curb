@@ -3,13 +3,13 @@ import {
   challengeDisablesDelete,
   challengeForcedSpeed,
   getActiveChallengeDefinitions,
-  getChallengeIconPath,
   type RuleChallengeId,
 } from "../challenge";
 import { colors } from "../gfx/colors";
 import { createElement, createSvgElement } from "../gfx/svg-utils";
 import { lakes, session } from "../state";
 import { APP_VERSION } from "../version";
+import { createChallengeIcon } from "./challenge-icon";
 
 export const uiContainer = createElement();
 
@@ -71,22 +71,15 @@ const createChallengeHudItem = (challenge: ActiveRuleChallenge): HTMLElement => 
   item.setAttribute("aria-label", item.title);
   item.setAttribute("role", "img");
   item.setAttribute("tabindex", "0");
-  item.style.setProperty("--challenge-accent", challenge.accent);
-  item.style.borderColor = `${challenge.accent}55`;
+  item.style.borderColor = `${challenge.accent}66`;
+  item.style.background = "";
+  item.style.color = challenge.accent;
 
-  const iconSvg = createSvgElement("svg");
-  iconSvg.setAttribute("viewBox", "0 0 24 24");
-  iconSvg.setAttribute("aria-hidden", "true");
-  iconSvg.style.width = "27px";
-  iconSvg.style.height = "27px";
-  const iconPath = createSvgElement("path");
-  iconPath.setAttribute("d", getChallengeIconPath(challenge.id));
-  iconPath.setAttribute("fill", "none");
-  iconPath.setAttribute("stroke", challenge.accent);
-  iconPath.setAttribute("stroke-width", "2.2");
-  iconPath.setAttribute("stroke-linecap", "round");
-  iconPath.setAttribute("stroke-linejoin", "round");
-  iconSvg.append(iconPath);
+  const iconSvg = createChallengeIcon(challenge.id, {
+    rail: true,
+    size: 29,
+    strokeWidth: 1.9,
+  });
 
   const tooltip = createElement();
   tooltip.className = "challenge-hud-tooltip";
@@ -494,17 +487,6 @@ export const initUi = () => {
       outline: none;
       pointer-events: all;
       transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-    }
-    .challenge-hud-item::after {
-      content: "";
-      position: absolute;
-      left: 5px;
-      top: 8px;
-      bottom: 8px;
-      width: 3px;
-      border-radius: 99px;
-      background: var(--challenge-accent);
-      opacity: .86;
     }
     .challenge-hud-item:hover,
     .challenge-hud-item:focus-visible {

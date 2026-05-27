@@ -59,9 +59,9 @@ export const challenges: ChallengeDefinition[] = [
   },
   {
     id: "autoRoads",
-    title: "Road Rations",
+    title: "Auto Roads",
     shortTitle: "Auto Roads",
-    description: "Auto roads. No upgrades.",
+    description: "Roads arrive automatically. No upgrades.",
     accent: "#29f",
     rules: { autoRoadUpgrade: true },
   },
@@ -99,31 +99,29 @@ export const challenges: ChallengeDefinition[] = [
   },
 ];
 
-const challengeById = new Map(challenges.map((challenge) => [challenge.id, challenge]));
+const challengeById = new Map(
+  challenges.map((challenge) => [challenge.id, challenge]),
+);
 
 export const ruleChallenges = challenges.filter(
   (challenge): challenge is ChallengeDefinition & { id: RuleChallengeId } =>
     challenge.id !== "zen",
 );
 
-const challengeIconPaths: Record<RuleChallengeId, string> = {
-  tripleSpeed: "M4 12h4l-2 7 8-10h-4l2-6z",
-  noDelete: "M6 7h12M9 7V5h6v2M8 10l1 9h6l1-9",
-  autoRoads: "M3 12h4q2 0 2-2t2-2h2q2 0 2 2t2 2h4M6 17h12",
-  tinyBudget: "M4 17h16M6 17l2-8h8l2 8M9 13h6",
-  noIntersections: "M4 12h16M12 4v16M7 7l10 10",
-  noPause: "M7 5v14M17 5v14M4 12h16",
-  colorLock: "M5 6h5v5H5zM14 13h5v5h-5zM10 8.5h3M11 15.5h3M13 8.5l-2 7",
-};
+const ruleChallengeIds = ruleChallenges.map((challenge) => challenge.id);
 
-export const getChallengeIconPath = (id: RuleChallengeId): string =>
-  challengeIconPaths[id];
+const sortRuleChallengeIds = (
+  ids: Iterable<RuleChallengeId>,
+): RuleChallengeId[] => {
+  const selected = new Set(ids);
+  return ruleChallengeIds.filter((id) => selected.has(id));
+};
 
 export let selectedStartMode: StartMode = "zen";
 export let activeChallengeIds: RuleChallengeId[] = [];
 
 const getActiveChallenges = (): ChallengeDefinition[] =>
-  activeChallengeIds
+  sortRuleChallengeIds(activeChallengeIds)
     .map((id) => challengeById.get(id))
     .filter((challenge): challenge is ChallengeDefinition => !!challenge);
 
@@ -141,9 +139,10 @@ export const challengeStartModeSelected = (): boolean =>
 export const setActiveChallenges = (ids: RuleChallengeId[]): void => {
   const accepted: RuleChallengeId[] = [];
   for (const id of ids) {
-    if (canCombineChallenge(id, accepted)) accepted.push(id);
+    if (!accepted.includes(id) && canCombineChallenge(id, accepted))
+      accepted.push(id);
   }
-  activeChallengeIds = accepted;
+  activeChallengeIds = sortRuleChallengeIds(accepted);
 };
 
 export const clearActiveChallenges = (): void => {

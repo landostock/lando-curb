@@ -4,7 +4,6 @@ import {
   canCombineChallenge,
   type ChallengeDefinition,
   clearActiveChallenges,
-  getChallengeIconPath,
   type RuleChallengeId,
   ruleChallenges,
   selectedStartMode,
@@ -14,12 +13,13 @@ import {
 import { colors } from "../gfx/colors";
 import { svgPxToDisplayPx } from "../gfx/coords";
 import { svgElement } from "../gfx/svg";
-import { createElement, createSvgElement } from "../gfx/svg-utils";
+import { createElement } from "../gfx/svg-utils";
 import {
   generateBerlinMap,
   generateOstholsteinMap,
   generateRandomMap,
 } from "../logic/generate-map";
+import { createChallengeIcon } from "./challenge-icon";
 import { gameoverWrapper } from "./gameover";
 import {
   gridToggleTooltip,
@@ -137,11 +137,11 @@ const setChallengePickerOpen = (open: boolean): void => {
   challengeOverlay.style.visibility = open ? "visible" : "hidden";
   challengeOverlay.style.pointerEvents = open ? "all" : "none";
   challengeOverlay.style.transition = open
-    ? "opacity .28s ease"
-    : "opacity .28s ease, visibility 0s linear .28s";
+    ? "opacity .34s ease"
+    : "opacity .34s ease, visibility 0s linear .34s";
   challengePanel.style.transform = open
     ? "translateY(0) scale(1)"
-    : "translateY(12px) scale(.98)";
+    : "translateY(10px) scale(.985)";
   updateChallengeButtons();
 };
 
@@ -197,13 +197,13 @@ const createChallengeCard = (
   const button = createElement("button");
   button.style.cssText = `
     display: grid;
-    grid-template-columns: 62px minmax(0, 1fr);
+    grid-template-columns: 60px minmax(0, 1fr);
     align-items: center;
-    gap: 14px;
+    gap: 13px;
     height: auto;
-    min-height: 94px;
-    padding: 13px 15px;
-    border-radius: 14px;
+    min-height: 82px;
+    padding: 11px 13px;
+    border-radius: 12px;
     border: 2px solid ${challenge.accent};
     font: inherit;
     text-align: left;
@@ -216,25 +216,16 @@ const createChallengeCard = (
   iconFrame.style.cssText = `
     display:grid;
     place-items:center;
-    width:56px;
-    height:56px;
-    border-radius:17px;
-    background:#f7f7f0;
-    box-shadow:inset 0 0 0 1px rgba(68,68,51,.08);
+    width:54px;
+    height:54px;
+    border-radius:15px;
+    color:${challenge.accent};
+    background:#fbfaf4;
+    box-shadow:
+      inset 0 0 0 1px rgba(68,68,51,.12),
+      0 5px 12px rgba(20,24,16,.06);
   `;
-  const iconSvg = createSvgElement("svg");
-  iconSvg.setAttribute("viewBox", "0 0 24 24");
-  iconSvg.setAttribute("width", "40");
-  iconSvg.setAttribute("height", "40");
-  const iconPath = createSvgElement("path");
-  iconPath.setAttribute("d", getChallengeIconPath(challenge.id));
-  iconPath.setAttribute("fill", "none");
-  iconPath.setAttribute("stroke", colors.ui);
-  iconPath.setAttribute("stroke-width", "2");
-  iconPath.setAttribute("stroke-linecap", "round");
-  iconPath.setAttribute("stroke-linejoin", "round");
-  iconSvg.append(iconPath);
-  iconFrame.append(iconSvg);
+  iconFrame.append(createChallengeIcon(challenge.id, { size: 41 }));
 
   const title = createElement();
   title.innerText = challenge.title;
@@ -337,41 +328,42 @@ const initChallengeModeControls = (): void => {
     inset: 0;
     display: grid;
     place-items: center;
-    padding: 24px;
+    padding: 22px;
     box-sizing: border-box;
-    background: rgba(31, 38, 24, .32);
-    backdrop-filter: blur(8px) saturate(1.08);
+    background: rgba(238, 243, 228, .46);
+    backdrop-filter: blur(9px) saturate(1.05);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity .28s ease, visibility 0s linear .28s;
+    transition: opacity .34s ease, visibility 0s linear .34s;
     z-index: 4;
   `;
   challengePanel.style.cssText = `
     position: relative;
-    width: min(820px, calc(100vw - 48px));
-    max-height: calc(100vh - 48px);
+    width: min(760px, calc(100vw - 44px));
+    max-height: calc(100vh - 44px);
     overflow: auto;
     box-sizing: border-box;
-    padding: 26px 28px 30px;
-    border-radius: 20px;
-    background: #eef3e4;
+    padding: 22px 24px 26px;
+    border-radius: 18px;
+    background: rgba(238, 243, 228, .9);
+    backdrop-filter: blur(14px) saturate(1.04);
     color: ${colors.ui};
     box-shadow:
-      0 24px 80px rgba(20, 24, 16, .28),
+      0 22px 70px rgba(20, 24, 16, .24),
       inset 0 0 0 1px rgba(68, 68, 51, .1);
-    transform: translateY(12px) scale(.98);
-    transition: transform .28s cubic-bezier(.2, 1.4, .35, 1);
+    transform: translateY(10px) scale(.985);
+    transition: transform .34s cubic-bezier(.2, 1.12, .28, 1);
   `;
 
   challengeCloseButton.style.cssText = `
     position: absolute;
-    top: 18px;
-    right: 18px;
+    top: 16px;
+    right: 16px;
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     padding: 0;
     border-radius: 50%;
     background: #fff;
@@ -388,14 +380,14 @@ const initChallengeModeControls = (): void => {
 
   challengeTitle.style.cssText = `
     margin: 0;
-    padding-right: 52px;
-    font-size: 30px;
+    padding-right: 48px;
+    font-size: 28px;
     line-height: 1;
     letter-spacing: 0;
   `;
   challengeTitle.innerText = "Select Challenges";
   challengeCopy.style.cssText = `
-    margin-top: 10px;
+    margin-top: 9px;
     max-width: 560px;
     font-size: 14px;
     line-height: 1.45;
@@ -405,9 +397,9 @@ const initChallengeModeControls = (): void => {
 
   challengeOptionsGrid.style.cssText = `
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 10px;
-    margin-top: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 9px;
+    margin-top: 18px;
   `;
   challengeOptionsGrid.append(
     ...ruleChallenges.map(createChallengeCard),
@@ -415,9 +407,9 @@ const initChallengeModeControls = (): void => {
   challengeStartButton.style.cssText = `
     display: inline-grid;
     place-items: center;
-    height: 44px;
-    margin-top: 16px;
-    padding: 0 19px;
+    height: 42px;
+    margin-top: 14px;
+    padding: 0 18px;
     border-radius: 12px;
     background: ${colors.ui};
     color: #fff;

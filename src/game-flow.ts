@@ -84,11 +84,10 @@ const selectMap = (map: MapGenerator): void => {
 
   if (challengeStartModeSelected()) {
     clearActiveChallenges();
-    hideMenu();
-    loop.stop();
     showChallengeStartPicker({
-      onCancel: returnToMenu,
+      onCancel: clearActiveChallenges,
       onStart: () => {
+        loop.stop();
         resetState();
         resetDeveloperMode();
         resetDeleteMode();
