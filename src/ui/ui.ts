@@ -44,6 +44,38 @@ export let gameSpeed: GameSpeed = 1;
 let gameplayControlsVisible = false;
 let developerModeButtonSuppressed = false;
 let developerModeAccessGranted = false;
+let developerModeButtonVisible = false;
+let helpButtonVisible = true;
+
+const RIGHT_CONTROL_BOTTOM = 16;
+const RIGHT_CONTROL_SLOT = 56;
+
+const rightControlBottom = (slot: number): string =>
+  `${RIGHT_CONTROL_BOTTOM + slot * RIGHT_CONTROL_SLOT}px`;
+
+const setRightControlSlot = (
+  button: HTMLElement,
+  slot: number,
+  tooltip?: HTMLElement,
+): void => {
+  const bottom = rightControlBottom(slot);
+  button.style.bottom = bottom;
+  if (tooltip) tooltip.style.bottom = bottom;
+};
+
+const layoutRightControls = (): void => {
+  let slot = 0;
+
+  if (helpButtonVisible) setRightControlSlot(helpButton, slot++);
+  if (gameplayControlsVisible) setRightControlSlot(audioModeButton, slot++);
+  if (gameplayControlsVisible && !challengeDisablesDelete()) {
+    setRightControlSlot(gridRedToggleButton, slot++, gridRedToggleTooltip);
+  }
+  if (gameplayControlsVisible) {
+    setRightControlSlot(gridToggleButton, slot++, gridToggleTooltip);
+  }
+  if (developerModeButtonVisible) setRightControlSlot(developerModeButton, slot++);
+};
 
 const updateHomeActionPosition = (): void => {
   const bridgeSlotVisible = lakes.length > 0 || session.bridges > 0;
@@ -156,6 +188,15 @@ export const grantDeveloperModeAccess = (): void => {
   updateDeveloperModeButtonVisibility();
 };
 
+export const toggleDeveloperModeAccess = (): void => {
+  if (developerMode) {
+    grantDeveloperModeAccess();
+    return;
+  }
+  developerModeAccessGranted = !developerModeAccessGranted;
+  updateDeveloperModeButtonVisibility();
+};
+
 export const requestDeveloperModeAccess = (): void => {
   if (developerMode) return;
   grantDeveloperModeAccess();
@@ -170,13 +211,18 @@ export const resetDeveloperMode = (): void => {
 };
 
 const updateDeveloperModeButtonVisibility = (): void => {
-  const visible =
+  developerModeButtonVisible =
     gameplayControlsVisible &&
     !developerModeButtonSuppressed &&
     (developerModeAccessGranted || developerMode);
-  developerModeButton.style.opacity = visible ? "1" : "0";
-  developerModeButton.style.visibility = visible ? "visible" : "hidden";
-  developerModeButton.style.pointerEvents = visible ? "all" : "none";
+  developerModeButton.style.opacity = developerModeButtonVisible ? "1" : "0";
+  developerModeButton.style.visibility = developerModeButtonVisible
+    ? "visible"
+    : "hidden";
+  developerModeButton.style.pointerEvents = developerModeButtonVisible
+    ? "all"
+    : "none";
+  layoutRightControls();
 };
 
 export const pauseButton = createElement("button");
@@ -347,6 +393,7 @@ export const setGameplayControlsVisible = (visible: boolean): void => {
   audioModeButton.style.pointerEvents = visible ? "all" : "none";
   gridToggleTooltip.style.pointerEvents = "none";
   updateDeveloperModeButtonVisibility();
+  layoutRightControls();
   if (!visible) {
     gridToggleTooltip.style.opacity = "0";
     gridRedToggleTooltip.style.opacity = "0";
@@ -354,8 +401,10 @@ export const setGameplayControlsVisible = (visible: boolean): void => {
 };
 
 export const setHelpButtonVisible = (visible: boolean): void => {
+  helpButtonVisible = visible;
   helpButton.style.opacity = visible ? "1" : "0";
   helpButton.style.pointerEvents = visible ? "all" : "none";
+  layoutRightControls();
 };
 
 export const setResourceHudElevated = (elevated: boolean): void => {
@@ -772,7 +821,7 @@ export const initUi = () => {
   gridRedToggleButton.append(gridRedToggleSvg);
   gridRedToggleButton.style.cssText = `
     position:absolute;
-    bottom:128px;
+    bottom:${rightControlBottom(2)};
     right:16px;
     padding:0;
     pointer-events:all;
@@ -798,7 +847,7 @@ export const initUi = () => {
     padding: 0 64px 0 16px;
     white-space: pre;
     pointer-events: none;
-    bottom: 128px;
+    bottom: ${rightControlBottom(2)};
     background: ${colors.red};
   `;
   gridRedToggleTooltip.style.height = "48px";
@@ -818,7 +867,7 @@ export const initUi = () => {
   gridToggleSvgPath.style.transformOrigin = "center";
   gridToggleSvg.append(gridToggleSvgPath);
   gridToggleButton.append(gridToggleSvg);
-  gridToggleButton.style.cssText = `position:absolute;bottom:184px;right:16px;padding:0;pointer-events:all;`;
+  gridToggleButton.style.cssText = `position:absolute;bottom:${rightControlBottom(3)};right:16px;padding:0;pointer-events:all;`;
   gridToggleButton.style.width = "48px";
   gridToggleButton.style.height = "48px";
   gridToggleButton.style.opacity = "0";
@@ -834,7 +883,7 @@ export const initUi = () => {
     padding: 0 64px 0 16px;
     white-space: pre;
     pointer-events: none;
-    bottom: 184px;
+    bottom: ${rightControlBottom(3)};
     background: ${colors.ui};
   `;
   gridToggleTooltip.style.height = "48px";
@@ -855,7 +904,7 @@ export const initUi = () => {
   audioModeButton.append(audioModeSvg);
   audioModeButton.style.cssText = `
     position:absolute;
-    bottom:72px;
+    bottom:${rightControlBottom(1)};
     right:16px;
     padding:0;
     pointer-events:all;
@@ -872,7 +921,7 @@ export const initUi = () => {
 
   developerModeButton.style.cssText = `
     position:absolute;
-    bottom:240px;
+    bottom:${rightControlBottom(4)};
     right:16px;
     padding:0;
     pointer-events:all;
@@ -1233,6 +1282,8 @@ export const initUi = () => {
   homeActionSvgPath.setAttribute("d", "M3 9.5 9 4l6 5.5M5 8.5V15h8V8.5M7.5 15v-4h3v4");
   homeActionSvg.append(homeActionSvgPath);
   homeActionIndicator.append(homeActionSvg, homeActionIndicatorCount);
+
+  layoutRightControls();
 
   uiContainer.append(
     scoreCounters,

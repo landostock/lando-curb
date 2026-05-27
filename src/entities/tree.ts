@@ -4,10 +4,20 @@ import { colors } from "../gfx/colors";
 import { treeLayer, treeShadowLayer } from "../gfx/layers";
 import { createSvgElement, toSvgPoint } from "../gfx/svg-utils";
 import { removeTree } from "../state";
+import type { Point } from "../types";
+
+export interface TreeCanopyCircle {
+  offset: Point;
+  radius: number;
+  crown: SVGCircleElement;
+  shadow: SVGEllipseElement;
+}
 
 export class Tree extends GameObjectClass {
   svgGroup!: SVGGElement;
   shadowGroup!: SVGGElement;
+  canopy: TreeCanopyCircle[] = [];
+  private removed = false;
 
   constructor(properties: Record<string, unknown>) {
     super(properties);
@@ -18,6 +28,7 @@ export class Tree extends GameObjectClass {
     const minDotGap = 0.5;
     const numTrees = Math.random() * 4;
     const { x, y } = toSvgPoint(this);
+    this.canopy = [];
 
     this.svgGroup = createSvgElement("g");
     this.svgGroup.style.transform = `translate(${x}px,${y}px)`;
@@ -44,8 +55,6 @@ export class Tree extends GameObjectClass {
         continue;
       }
 
-      dots.push({ position, size });
-
       const circle = createSvgElement("circle");
       circle.style.transform = `translate(${position.x}px, ${position.y}px)`;
       circle.setAttribute("fill", colors.leaf);
@@ -67,10 +76,39 @@ export class Tree extends GameObjectClass {
         shadow.style.transform = `translate(${position.x + size * 0.7}px,${position.y + size * 0.7}px) rotate(45deg)`;
       }, 100 * i);
       this.shadowGroup.append(shadow);
+
+      dots.push({ position, size });
+      this.canopy.push({
+        offset: { x: position.x, y: position.y },
+        radius: size,
+        crown: circle,
+        shadow,
+      });
     }
   }
 
+  removeCanopyCircle(circle: TreeCanopyCircle): void {
+    if (this.removed) return;
+    const index = this.canopy.indexOf(circle);
+    if (index < 0) return;
+    this.canopy.splice(index, 1);
+    circle.crown.remove();
+    circle.shadow.remove();
+    if (this.canopy.length === 0) this.remove();
+  }
+
+  canopyCenter(circle: TreeCanopyCircle): Point {
+    const center = toSvgPoint(this);
+    return {
+      x: center.x + circle.offset.x,
+      y: center.y + circle.offset.y,
+    };
+  }
+
   remove() {
+    if (this.removed) return;
+    this.removed = true;
+    this.canopy.length = 0;
     this.svgGroup.remove();
     this.shadowGroup.remove();
     removeTree(this);

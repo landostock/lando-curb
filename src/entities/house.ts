@@ -15,6 +15,7 @@ import { streetWouldCreateIntersection } from "../logic/intersections";
 import { commitStreetChanges } from "../logic/orchestrator";
 import { cellInLake, cellIsBlocked } from "../logic/placement-obstacles";
 import { isStreetEdge } from "../logic/street-edge";
+import { pruneTreesNearHouse } from "../logic/tree-clearance";
 import {
   addCommuter,
   addStreet,
@@ -75,6 +76,7 @@ export class House extends GameObjectClass {
     }, 2000);
 
     this.addToSvg();
+    pruneTreesNearHouse(this);
   }
 
   private retireStartPath(street: Street): void {
@@ -85,6 +87,14 @@ export class House extends GameObjectClass {
     return streets.find(
       (street) =>
         street.pendingRemoval && streetMatchesEdge(street, houseCell, targetCell),
+    );
+  }
+
+  private drivewayStreets(): Street[] {
+    return streets.filter((street) =>
+      street.points.some(
+        (point) => point.locked && point.x === this.x && point.y === this.y,
+      ),
     );
   }
 
@@ -123,6 +133,7 @@ export class House extends GameObjectClass {
           { x: this.x, y: this.y, locked: true },
           { x, y, locked: true },
         ],
+        pruneTreesImmediately: false,
       });
     if (retiredStartPath) retiredStartPath.pendingRemoval = false;
     else addStreet(stagedNew);
@@ -321,7 +332,8 @@ export class House extends GameObjectClass {
       removeCommuter(child);
     }
     this.children.length = 0;
-    this.startPath?.remove();
+    this.drivewayStreets().forEach((street) => street.remove());
+    this.startPath = undefined;
     this.svgGroup.remove();
     this.shadow.remove();
     this.baseShadow?.remove();

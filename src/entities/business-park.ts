@@ -12,6 +12,7 @@ import {
 } from "../logic/demand-model-config";
 import { updateGridData } from "../logic/find-route";
 import { getSpawningConfig } from "../logic/spawning";
+import { pruneTreesNearBusinessPark } from "../logic/tree-clearance";
 import { addStreet, businessParks, session } from "../state";
 import type { Cell, Direction, Pixel, Point } from "../types";
 import { pickupCount } from "../ui/ui";
@@ -21,7 +22,11 @@ import {
   scheduleSpawnAnimation,
 } from "./business-park.render";
 import type { Commuter } from "./commuter";
-import { Street } from "./street";
+import {
+  pruneTreesOverRenderedStreets,
+  pruneTreesOverStreetPoints,
+  Street,
+} from "./street";
 import { drawStreets } from "./street.render";
 
 export interface BusinessParkProperties {
@@ -301,6 +306,10 @@ export class BusinessPark extends GameObjectClass {
       const inside = relativePathPoints[0]!;
       this.entryCell = { x: this.x + inside.x, y: this.y + inside.y } as Cell;
       const outside = relativePathPoints[1]!;
+      pruneTreesOverStreetPoints([
+        this.entryCell,
+        { x: this.x + outside.x, y: this.y + outside.y } as Cell,
+      ]);
       if (outside.y < 0) this.entryEdge = 0;
       else if (outside.x >= this.width) this.entryEdge = 1;
       else if (outside.y >= this.height) this.entryEdge = 2;
@@ -314,6 +323,7 @@ export class BusinessPark extends GameObjectClass {
       inferParkingVariant(this.entryEdge, this.entryCell, this);
     this.baySlots = Array<Commuter | null>(this.parkingCapacity).fill(null);
 
+    pruneTreesNearBusinessPark(this);
     spawnSequence(this, relativePathPoints);
   }
 
@@ -405,6 +415,7 @@ function spawnSequence(
       });
       addStreet(bp.startPath);
       drawStreets();
+      pruneTreesOverRenderedStreets();
       updateGridData();
     }, 1500 + delay);
   }

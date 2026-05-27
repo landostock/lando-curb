@@ -14,7 +14,7 @@ import { getSpawningConfig } from "../logic/spawning";
 import type { Pixel } from "../types";
 import type { BusinessPark } from "./business-park";
 
-interface LayoutRect {
+export interface LayoutRect {
   x: number;
   y: number;
   w: number;
@@ -178,6 +178,20 @@ function computeLayout(bp: BusinessPark): ParkLayout {
     buildingRects,
     demandBounds,
   };
+}
+
+export function businessParkTreeClearanceRects(bp: BusinessPark): LayoutRect[] {
+  if (bp.rs) {
+    return [
+      { x: bp.rs.parkX, y: bp.rs.parkY, w: bp.rs.parkW, h: bp.rs.parkH },
+      ...bp.rs.buildingRects,
+    ];
+  }
+  const layout = computeLayout(bp);
+  return [
+    { x: layout.x, y: layout.y, w: layout.svgWidth, h: layout.svgHeight },
+    ...layout.buildingRects,
+  ];
 }
 
 export function renderBusinessPark(bp: BusinessPark): void {

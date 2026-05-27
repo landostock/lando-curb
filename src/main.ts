@@ -55,6 +55,7 @@ import {
   requestDeveloperModeAccess,
   scoreCounters,
   setAudioModeButton,
+  toggleDeveloperModeAccess,
 } from "./ui/ui";
 
 interface HmrData {
@@ -305,7 +306,7 @@ const handleDeveloperScoreClick = (event: Event): void => {
   if (developerScoreClicks >= 3) {
     developerScoreClicks = 0;
     developerScoreWindowStart = 0;
-    requestDeveloperModeAccess();
+    toggleDeveloperModeAccess();
     return;
   }
   const resetDelay = Math.max(0, 2000 - (now - developerScoreWindowStart));

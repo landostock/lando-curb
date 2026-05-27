@@ -7,6 +7,7 @@ import {
   renderFernsehturm,
   renderSeaLabel,
 } from "../entities/landmark";
+import { pruneTreesOverRenderedStreets } from "../entities/street";
 import { drawStreets } from "../entities/street.render";
 import { Tree } from "../entities/tree";
 import { colors } from "../gfx/colors";
@@ -130,6 +131,7 @@ export const generateBerlinMap = (delay: number): void => {
     { x: 9, y: 3 },
   ] as Cell[]);
   drawStreets();
+  pruneTreesOverRenderedStreets();
 
   // First business park — "Alexanderplatz" (red, east of center)
   // 3×2 landscape, entry right → parking = 1×2 strip on right, building = 2×2 on left

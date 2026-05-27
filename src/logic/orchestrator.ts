@@ -2,6 +2,7 @@ import { playUpgradeReadyFanfare } from "../audio";
 import { growBoard } from "../board";
 import { challengeUsesAutoRoadUpgrades } from "../challenge";
 import { rerouteAllCommuters } from "../entities/commuter";
+import { pruneTreesOverRenderedStreets } from "../entities/street";
 import { drawStreets } from "../entities/street.render";
 import { checkGameOver, gameState } from "../game-flow";
 import { updateGridBounds } from "../gfx/grid";
@@ -30,6 +31,7 @@ import { updateGridData } from "./find-route";
 import { cleanupPendingStreets } from "./remove-street";
 import { getSpawningConfig, spawnNewObjects } from "./spawning";
 import { TIMING } from "./timing";
+import { tickTreeGrowth } from "./tree-growth";
 
 /** Structural handle for the game loop — decouples this module from kontra. */
 interface LoopControl {
@@ -56,6 +58,7 @@ export const commitStreetChanges = (
   { noShadow = false }: { noShadow?: boolean } = {},
 ): void => {
   drawStreets({ noShadow });
+  pruneTreesOverRenderedStreets();
   updateGridData();
   rerouteAllCommuters(forceAtWork);
 };
@@ -157,6 +160,7 @@ const runGameplayPhase = (loop: LoopControl): void => {
   if (tick <= 1 || tick < lastGameplayTick) resetUpgradeSchedule(tick);
   lastGameplayTick = tick;
   spawnNewObjects(tick, 1);
+  tickTreeGrowth(tick);
   revealHudMilestones(tick);
   maybeNominateTrending(tick);
   maybeShowUpgradePicker(tick, loop);

@@ -5,6 +5,8 @@ import type { Commuter } from "./commuter";
 
 const CAR_W = 1.4;
 const CAR_H = 2.2;
+const DIAGONAL_HOME_CAR_NUDGE = 0.28;
+const DIAGONAL_HOME_CAR_GAP = 0.18;
 
 /** Build the car's SVG group + body + windshield + hidden load pin, and attach handles on `c`. */
 export const addCommuterToSvg = (c: Commuter): void => {
@@ -60,9 +62,11 @@ export const renderCommuter = (c: Commuter): void => {
     const len = Math.hypot(facing.x, facing.y) || 1;
     const ux = facing.x / len, uy = facing.y / len;
     const px = -uy, py = ux;
+    const diagonal = facing.x !== 0 && facing.y !== 0;
 
-    const dAlong = 2.8 + 0.8 - CAR_H / 2;
-    const dCross = (CAR_W + 0.3) / 2;
+    const dAlong =
+      2.8 + 0.8 - CAR_H / 2 + (diagonal ? DIAGONAL_HOME_CAR_NUDGE : 0);
+    const dCross = (CAR_W + 0.3 + (diagonal ? DIAGONAL_HOME_CAR_GAP : 0)) / 2;
     const side = c.parent.children.indexOf(c) === 0 ? -1 : 1;
 
     const cx = houseX + ux * dAlong + px * dCross * side;

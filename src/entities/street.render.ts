@@ -61,6 +61,14 @@ let motorwayData: StreetData[] = [];
 let motorwayDashData: MotorwayDashData[] = [];
 let recentlyRemoved: Cell[] = [];
 
+export const getRenderedStreetCenterlinePaths = (): SVGPathElement[] =>
+  streetsData
+    .map((sd) => sd.svgElement)
+    .filter(
+      (element): element is SVGPathElement =>
+        !!element && "getTotalLength" in element && element.isConnected,
+    );
+
 const midpoint = (a: Point, b: Point): Point => ({
   x: (a.x + b.x) / 2,
   y: (a.y + b.y) / 2,

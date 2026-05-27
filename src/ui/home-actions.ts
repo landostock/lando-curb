@@ -9,17 +9,18 @@ import {
   createSvgElement,
   gridCellSize,
   toSvgEdge,
+  toSvgPoint,
 } from "../gfx/svg-utils";
 import { gridHide, gridShow } from "../input/grid-toggle";
 import { houseTypeChangesWouldMixColors } from "../logic/color-lock";
 import { commitStreetChanges } from "../logic/orchestrator";
 import {
+  cellIsObstructed,
   houseInCell,
-  isAreaFree,
   streetWouldClipBuilding,
 } from "../logic/placement-obstacles";
-import { addHouse, session, trees } from "../state";
-import type { Cell, Direction, Rect } from "../types";
+import { addHouse, session, streets } from "../state";
+import type { Cell, Direction, Point } from "../types";
 import { inRect } from "../util/geometry";
 import {
   developerMode,
@@ -38,7 +39,9 @@ const DIRECTIONS: Direction[] = [
   { x: -1, y: 0 } as Direction,
 ];
 
-const TREE_CLEARANCE_RADIUS = 1;
+const ROAD_STROKE_RADIUS = 3.14 / 2;
+const MOVED_HOUSE_STREET_CLEARANCE = 0.05;
+const GEOMETRY_EPSILON = 1e-6;
 
 const shell = createElement();
 const panel = createElement();
@@ -124,21 +127,135 @@ const showPlacementMarker = (cell: Cell, valid: boolean): void => {
   placementMarker.style.display = "";
 };
 
-const cellDistance = (a: Cell, b: Cell): number =>
-  Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+interface SvgRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
-const clearTreesForHousePlacement = (cell: Cell, facing: Direction): void => {
-  const driveway = { x: cell.x + facing.x, y: cell.y + facing.y } as Cell;
-  for (const tree of [...trees]) {
-    const treeCell = { x: tree.x, y: tree.y } as Cell;
-    if (
-      cellDistance(treeCell, cell) <= TREE_CLEARANCE_RADIUS ||
-      cellDistance(treeCell, driveway) <= TREE_CLEARANCE_RADIUS
-    ) {
-      tree.remove();
-    }
-  }
+const movedHouseHalfSize = (style?: string): Point =>
+  style === "plattenbau" ? { x: 3, y: 2.4 } : { x: 2.8, y: 2.8 };
+
+const distanceToSegment = (point: Point, start: Point, end: Point): number => {
+  const vx = end.x - start.x;
+  const vy = end.y - start.y;
+  const wx = point.x - start.x;
+  const wy = point.y - start.y;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, (wx * vx + wy * vy) / len2)) : 0;
+  const px = start.x + vx * t;
+  const py = start.y + vy * t;
+  return Math.hypot(point.x - px, point.y - py);
 };
+
+const distanceToRect = (point: Point, rect: SvgRect): number => {
+  const dx = Math.max(rect.left - point.x, 0, point.x - rect.right);
+  const dy = Math.max(rect.top - point.y, 0, point.y - rect.bottom);
+  return Math.hypot(dx, dy);
+};
+
+const segmentDirection = (a: Point, b: Point, c: Point): number =>
+  (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+
+const pointOnSegment = (point: Point, start: Point, end: Point): boolean =>
+  Math.min(start.x, end.x) - GEOMETRY_EPSILON <= point.x &&
+  point.x <= Math.max(start.x, end.x) + GEOMETRY_EPSILON &&
+  Math.min(start.y, end.y) - GEOMETRY_EPSILON <= point.y &&
+  point.y <= Math.max(start.y, end.y) + GEOMETRY_EPSILON &&
+  Math.abs(segmentDirection(start, end, point)) <= GEOMETRY_EPSILON;
+
+const segmentsIntersect = (
+  a: Point,
+  b: Point,
+  c: Point,
+  d: Point,
+): boolean => {
+  const d1 = segmentDirection(a, b, c);
+  const d2 = segmentDirection(a, b, d);
+  const d3 = segmentDirection(c, d, a);
+  const d4 = segmentDirection(c, d, b);
+
+  return (
+    ((d1 > GEOMETRY_EPSILON && d2 < -GEOMETRY_EPSILON) ||
+      (d1 < -GEOMETRY_EPSILON && d2 > GEOMETRY_EPSILON)) &&
+      ((d3 > GEOMETRY_EPSILON && d4 < -GEOMETRY_EPSILON) ||
+        (d3 < -GEOMETRY_EPSILON && d4 > GEOMETRY_EPSILON)) ||
+    (Math.abs(d1) <= GEOMETRY_EPSILON && pointOnSegment(c, a, b)) ||
+    (Math.abs(d2) <= GEOMETRY_EPSILON && pointOnSegment(d, a, b)) ||
+    (Math.abs(d3) <= GEOMETRY_EPSILON && pointOnSegment(a, c, d)) ||
+    (Math.abs(d4) <= GEOMETRY_EPSILON && pointOnSegment(b, c, d))
+  );
+};
+
+const pointInSvgRect = (point: Point, rect: SvgRect): boolean =>
+  point.x >= rect.left &&
+  point.x <= rect.right &&
+  point.y >= rect.top &&
+  point.y <= rect.bottom;
+
+const segmentIntersectsRect = (
+  start: Point,
+  end: Point,
+  rect: SvgRect,
+): boolean => {
+  if (pointInSvgRect(start, rect) || pointInSvgRect(end, rect)) return true;
+
+  const topLeft = { x: rect.left, y: rect.top };
+  const topRight = { x: rect.right, y: rect.top };
+  const bottomRight = { x: rect.right, y: rect.bottom };
+  const bottomLeft = { x: rect.left, y: rect.bottom };
+  return (
+    segmentsIntersect(start, end, topLeft, topRight) ||
+    segmentsIntersect(start, end, topRight, bottomRight) ||
+    segmentsIntersect(start, end, bottomRight, bottomLeft) ||
+    segmentsIntersect(start, end, bottomLeft, topLeft)
+  );
+};
+
+const segmentRectDistance = (
+  start: Point,
+  end: Point,
+  rect: SvgRect,
+): number => {
+  if (segmentIntersectsRect(start, end, rect)) return 0;
+  const corners = [
+    { x: rect.left, y: rect.top },
+    { x: rect.right, y: rect.top },
+    { x: rect.right, y: rect.bottom },
+    { x: rect.left, y: rect.bottom },
+  ];
+  return Math.min(
+    distanceToRect(start, rect),
+    distanceToRect(end, rect),
+    ...corners.map((corner) => distanceToSegment(corner, start, end)),
+  );
+};
+
+const streetClipsMovedHouse = (cell: Cell, style?: string): boolean => {
+  const center = toSvgPoint(cell);
+  const half = movedHouseHalfSize(style);
+  const rect: SvgRect = {
+    left: center.x - half.x,
+    top: center.y - half.y,
+    right: center.x + half.x,
+    bottom: center.y + half.y,
+  };
+  const minDistance = ROAD_STROKE_RADIUS + MOVED_HOUSE_STREET_CLEARANCE;
+  return streets.some(
+    (street) =>
+      segmentRectDistance(
+        toSvgPoint(street.points[0]),
+        toSvgPoint(street.points[1]),
+        rect,
+      ) <= minDistance,
+  );
+};
+
+const canPlaceMovedHouseAt = (cell: Cell, style?: string): boolean =>
+  inRect(cell, board) &&
+  !cellIsObstructed(cell, { avoidTrees: false }) &&
+  !streetClipsMovedHouse(cell, style);
 
 const consumeAction = (): void => {
   if (!developerMode) session.homeActions = Math.max(0, session.homeActions - 1);
@@ -338,22 +455,18 @@ const renderMovePick = (): void => {
 };
 
 const candidateFacing = (cell: Cell): Direction | null => {
-  if (!inRect(cell, board)) return null;
-  for (const facing of DIRECTIONS) {
+  if (!canPlaceMovedHouseAt(cell, pendingMove?.style)) return null;
+
+  const inBoardDirections = DIRECTIONS.filter((facing) =>
+    inRect({ x: cell.x + facing.x, y: cell.y + facing.y }, board),
+  );
+
+  for (const facing of inBoardDirections) {
     const endpoint = { x: cell.x + facing.x, y: cell.y + facing.y } as Cell;
-    if (!inRect(endpoint, board)) continue;
-    if (
-      isAreaFree({
-        rect: { x: cell.x, y: cell.y, width: 1, height: 1 } as Rect<Cell>,
-        extra: facing,
-        avoidTrees: false,
-      }) &&
-      !streetWouldClipBuilding(cell, endpoint)
-    ) {
-      return facing;
-    }
+    if (!streetWouldClipBuilding(cell, endpoint)) return facing;
   }
-  return null;
+
+  return inBoardDirections[0] ?? null;
 };
 
 const renderMovePlace = (): void => {
@@ -370,7 +483,7 @@ const renderMovePlace = (): void => {
   primaryButton.style.display = "none";
   secondaryButton.innerText = "Undo Demolition";
   secondaryButton.style.display = "";
-  setStatus("Click an open field with room for the new driveway.");
+  setStatus("Click an open field.");
 };
 
 const swapWouldViolateColorLock = (a: House, b: House): boolean =>
@@ -406,7 +519,6 @@ const applySwap = (a: House, b: House): void => {
 const demolishHouse = (house: House): void => {
   queuedMoveHouse = null;
   holdHouse(house, false);
-  clearTreesForHousePlacement({ x: house.x, y: house.y } as Cell, house.facing);
   pendingMove = {
     type: house.type,
     style: house.style,
@@ -441,10 +553,6 @@ const waitForReady = (
 
 const restorePendingMove = (): void => {
   if (!pendingMove) return;
-  clearTreesForHousePlacement(
-    { x: pendingMove.original.x, y: pendingMove.original.y } as Cell,
-    pendingMove.original.facing,
-  );
   addHouse(
     new House({
       x: pendingMove.original.x,
@@ -577,7 +685,6 @@ const confirmDemolition = (): void => {
 
 const confirmBuild = (): void => {
   if (!pendingMove || !placement) return;
-  clearTreesForHousePlacement(placement.cell, placement.facing);
   addHouse(
     new House({
       x: placement.cell.x,
@@ -657,7 +764,7 @@ export const handleHomeActionCellClick = (cell: Cell): boolean => {
   if (!facing) {
     placement = null;
     setPrimaryEnabled(false);
-    setStatus("That field is blocked or has no room for a driveway.");
+    setStatus("That field is blocked.");
     return true;
   }
   placement = { cell, facing };
