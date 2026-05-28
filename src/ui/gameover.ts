@@ -149,8 +149,8 @@ export const initGameover = (
     width:48px;
     height:48px;
     padding:0;
-    right:16px;
-    top:16px;
+    right:calc(env(safe-area-inset-right, 0px) + 16px);
+    top:calc(env(safe-area-inset-top, 0px) + 16px);
     line-height:0;
     background:#f7f7f0;
     color:${colors.ui};

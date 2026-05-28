@@ -12,6 +12,7 @@ import {
   restartCurrentRun,
   returnToMenu,
 } from "./game-flow";
+import { gameInputLocked, setGameInputLocked } from "./input/game-input-lock";
 import { gridLockToggle, gridRedLockToggle } from "./input/grid-toggle";
 import { initPointer } from "./input/pointer";
 import { renderWorld, tickWorld } from "./logic/orchestrator";
@@ -46,6 +47,7 @@ import {
   gridToggleTooltip,
   helpButton,
   helpCloseButton,
+  helpFullscreenButton,
   helpMenuButton,
   helpOverlay,
   helpPanel,
@@ -56,7 +58,10 @@ import {
   scoreCounters,
   setAudioModeButton,
   toggleDeveloperModeAccess,
+  updateHelpFullscreenButton,
 } from "./ui/ui";
+import { initAppViewport } from "./util/app-viewport";
+import { fullscreenActive, toggleFullscreen } from "./util/fullscreen";
 
 interface HmrData {
   initialized?: boolean;
@@ -104,6 +109,7 @@ const loop = GameLoop({
 });
 
 const isHmr = hmrData?.initialized === true;
+const cleanupAppViewport = initAppViewport();
 
 // initUi injects a <style> element; initPointer adds permanent DOM listeners —
 // only safe to call once, skip on hot reloads.
@@ -117,14 +123,18 @@ if (!isHmr) {
     onContinue: () => {
       closeInGameMenu();
     },
+    onToggleFullscreen: () => runFullscreenAction(),
+    isFullscreenActive: fullscreenActive,
     onRestart: () => {
       hideSessionMenu();
+      setGameInputLocked("session-menu", false);
       closeHomeActions();
       setPauseVisual(false);
       restartCurrentRun();
     },
     onMainMenu: () => {
       hideSessionMenu();
+      setGameInputLocked("session-menu", false);
       closeHomeActions();
       setPauseVisual(false);
       returnToMenu();
@@ -157,6 +167,7 @@ const setPauseVisual = (paused: boolean): void => {
 };
 
 const togglePause = (): void => {
+  if (gameInputLocked()) return;
   if (gameState.gameStarted && gameState.totalUpdateCount > TIMING.hud.pause) {
     if (loop.isStopped) {
       loop.start();
@@ -177,11 +188,13 @@ const openInGameMenu = ({ allowStopped = false } = {}): void => {
   loop.stop();
   gameState.paused = true;
   setPauseVisual(true);
+  setGameInputLocked("session-menu", true);
   showSessionMenu();
 };
 
 const closeInGameMenu = (): void => {
   hideSessionMenu();
+  setGameInputLocked("session-menu", false);
   if (!gameState.gameStarted) return;
   loop.start();
   gameState.paused = false;
@@ -196,11 +209,21 @@ const toggleInGameMenu = (): void => {
 const ac = new AbortController();
 const { signal } = ac;
 
+const syncFullscreenState = (): void => {
+  updateHelpFullscreenButton(fullscreenActive());
+};
+
+const runFullscreenAction = async (): Promise<void> => {
+  await toggleFullscreen();
+  syncFullscreenState();
+};
+
 const isAudioMode = (mode: unknown): mode is AudioMode =>
   mode === "all" || mode === "muted" || mode === "music" || mode === "sfx";
 
 const handleDeveloperAccessKey = (event: Event): void => {
   if (!(event instanceof KeyboardEvent)) return;
+  if (gameInputLocked()) return;
   const key = event.key.toLowerCase();
   const isDeveloperKey =
     event.code === "KeyD" ||
@@ -240,6 +263,7 @@ let developerScoreResetTimer: ReturnType<typeof setTimeout> | undefined;
 const openHelp = (): void => {
   if (helpOpen) return;
   helpOpen = true;
+  setGameInputLocked("help", true);
   helpMenuButton.style.display =
     gameState.gameStarted ||
     gameState.gameOverlayHidden ||
@@ -260,6 +284,7 @@ const openHelp = (): void => {
 const closeHelp = (): void => {
   if (!helpOpen) return;
   helpOpen = false;
+  setGameInputLocked("help", false);
   helpOverlay.setAttribute("aria-hidden", "true");
   helpOverlay.style.pointerEvents = "none";
   helpOverlay.style.opacity = "0";
@@ -287,6 +312,7 @@ const handleClockClick = (event: Event): void => {
   if (!(event instanceof MouseEvent)) return;
   event.preventDefault();
   event.stopPropagation();
+  if (gameInputLocked()) return;
   if (!canChangeGameSpeed()) return;
   const speed = cycleGameSpeed();
   playSpeedToggleSound(speed);
@@ -319,6 +345,9 @@ const handleDeveloperScoreClick = (event: Event): void => {
 clock.addEventListener("click", handleClockClick, { signal });
 scoreCounters.addEventListener("click", handleDeveloperScoreClick, { signal });
 helpButton.addEventListener("click", openHelp, { signal });
+helpFullscreenButton.addEventListener("click", () => void runFullscreenAction(), {
+  signal,
+});
 helpCloseButton.addEventListener("click", closeHelp, { signal });
 helpMenuButton.addEventListener(
   "click",
@@ -361,9 +390,14 @@ window.addEventListener(
   },
   { signal },
 );
+document.addEventListener("fullscreenchange", syncFullscreenState, { signal });
+document.addEventListener("webkitfullscreenchange", syncFullscreenState, {
+  signal,
+});
+syncFullscreenState();
 
 const isPlainShortcutEvent = (event: KeyboardEvent): boolean =>
-  !helpOpen &&
+  !gameInputLocked() &&
   !event.repeat &&
   !event.metaKey &&
   !event.ctrlKey &&
@@ -393,12 +427,27 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 const handleGlobalKeydown = (event: KeyboardEvent): void => {
   if (event.key === "Escape") {
     event.preventDefault();
+    event.stopPropagation();
     if (helpOpen) closeHelp();
-    else toggleInGameMenu();
+    else if (isSessionMenuOpen() || !gameInputLocked()) toggleInGameMenu();
     return;
   }
-  if (isSessionMenuOpen()) return;
   if (isEditableTarget(event.target)) return;
+
+  if (
+    !event.repeat &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    shortcutKey(event, "KeyF", "f")
+  ) {
+    event.preventDefault();
+    void runFullscreenAction();
+    return;
+  }
+
+  if (gameInputLocked()) return;
+  if (isSessionMenuOpen()) return;
   if (!isPlainShortcutEvent(event)) return;
 
   const requestedSpeed = shortcutDigit(event);
@@ -438,7 +487,7 @@ const handleGlobalKeydown = (event: KeyboardEvent): void => {
 document.addEventListener(
   "keypress",
   (event) => {
-    if (helpOpen || isSessionMenuOpen()) return;
+    if (gameInputLocked() || helpOpen || isSessionMenuOpen()) return;
     if (event.key === " ") {
       // Prevent double-toggling when the pause button itself has focus.
       if (event.target !== pauseButton) togglePause();
@@ -451,7 +500,7 @@ document.addEventListener(
 document.addEventListener(
   "keydown",
   handleGlobalKeydown,
-  { signal },
+  { capture: true, signal },
 );
 
 if (!isHmr) {
@@ -472,6 +521,7 @@ if (import.meta.hot) {
     d.renderCount = gameState.renderCount;
     d.paused = gameState.paused;
     d.gameOverlayHidden = gameState.gameOverlayHidden;
+    cleanupAppViewport();
     ac.abort();
     loop.stop();
     if (window.__landoLoopToken === loopToken)

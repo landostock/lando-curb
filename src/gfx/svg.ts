@@ -16,8 +16,8 @@ svgContainerElement.style.cssText = `
     ${colors.grass};
   cursor: cell;
 `;
-svgContainerElement.style.width = "100vw";
-svgContainerElement.style.height = "100vh";
+svgContainerElement.style.width = "var(--app-width, 100vw)";
+svgContainerElement.style.height = "var(--app-height, 100dvh)";
 document.body.append(svgContainerElement);
 
 export const svgHazardLines = createElement();
@@ -26,8 +26,8 @@ svgHazardLines.style.cssText = `
   display: grid;
   background: none;
 `;
-svgHazardLines.style.width = "100vw";
-svgHazardLines.style.height = "100vh";
+svgHazardLines.style.width = "var(--app-width, 100vw)";
+svgHazardLines.style.height = "var(--app-height, 100dvh)";
 svgHazardLines.style.opacity = "0";
 svgHazardLines.style.willChange = "opacity";
 svgHazardLines.style.transition = "opacity .3s";
@@ -38,8 +38,8 @@ svgHazardLinesRed.style.cssText = `
   display: grid;
   background: none;
 `;
-svgHazardLinesRed.style.width = "100vw";
-svgHazardLinesRed.style.height = "100vh";
+svgHazardLinesRed.style.width = "var(--app-width, 100vw)";
+svgHazardLinesRed.style.height = "var(--app-height, 100dvh)";
 svgHazardLinesRed.style.opacity = "0";
 svgHazardLinesRed.style.willChange = "opacity";
 svgHazardLinesRed.style.transition = "opacity .3s";
@@ -57,10 +57,10 @@ svgElement.style.cssText = `
 `;
 svgElement.setAttribute("viewBox", `0 0 ${gridSvgWidth} ${gridSvgHeight}`);
 svgElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
-svgElement.style.width = "100vw";
-svgElement.style.height = "100vh";
-svgElement.style.maxHeight = "68vw";
-svgElement.style.maxWidth = "200vh";
+svgElement.style.width = "var(--app-width, 100vw)";
+svgElement.style.height = "var(--app-height, 100dvh)";
+svgElement.style.maxHeight = "calc(var(--app-width, 100vw) * .68)";
+svgElement.style.maxWidth = "calc(var(--app-height, 100dvh) * 2)";
 svgContainerElement.append(svgElement);
 
 const startW = (board.width + 2) * gridCellSize;

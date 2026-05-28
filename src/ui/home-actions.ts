@@ -11,6 +11,7 @@ import {
   toSvgEdge,
   toSvgPoint,
 } from "../gfx/svg-utils";
+import { gameInputLocked } from "../input/game-input-lock";
 import { gridHide, gridShow } from "../input/grid-toggle";
 import { houseTypeChangesWouldMixColors } from "../logic/color-lock";
 import { commitStreetChanges } from "../logic/orchestrator";
@@ -344,9 +345,13 @@ const hideShell = (): void => {
 
 const dockPanel = (docked: boolean): void => {
   panel.style.left = docked ? "auto" : "50%";
-  panel.style.right = docked ? "14px" : "";
-  panel.style.top = docked ? "14px" : "16px";
-  panel.style.width = docked ? "min(320px, calc(100vw - 28px))" : "min(440px, calc(100vw - 32px))";
+  panel.style.right = docked ? "calc(env(safe-area-inset-right, 0px) + 14px)" : "";
+  panel.style.top = docked
+    ? "calc(env(safe-area-inset-top, 0px) + 14px)"
+    : "calc(env(safe-area-inset-top, 0px) + 16px)";
+  panel.style.width = docked
+    ? "min(320px, calc(var(--app-width, 100vw) - 28px))"
+    : "min(440px, calc(var(--app-width, 100vw) - 32px))";
   panel.style.transform = docked ? "translateX(0)" : "translateX(-50%)";
   panel.style.opacity = docked ? ".76" : "1";
 };
@@ -611,6 +616,7 @@ export const resumeHomeActionsAfterOverlay = (): void => {
 };
 
 const open = (): void => {
+  if (gameInputLocked()) return;
   if (queuedSwap || queuedMoveHouse) return;
   if (!canSpendHomeAction()) {
     flashUnavailable();
@@ -621,6 +627,7 @@ const open = (): void => {
 };
 
 export const startHomeActionSwap = (): void => {
+  if (gameInputLocked()) return;
   if (queuedSwap || queuedMoveHouse) return;
   if (mode === "swap") {
     close();
@@ -802,8 +809,8 @@ export const initHomeActions = (): void => {
   panel.style.cssText = `
     position:absolute;
     left:50%;
-    top:16px;
-    width:min(440px, calc(100vw - 32px));
+    top:calc(env(safe-area-inset-top, 0px) + 16px);
+    width:min(440px, calc(var(--app-width, 100vw) - 32px));
     box-sizing:border-box;
     transform:translateX(-50%);
     border-radius:18px;

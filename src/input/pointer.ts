@@ -22,6 +22,7 @@ import {
 } from "../ui/home-actions";
 import { isAdjacent } from "../util/geometry";
 import { initCarClick } from "./car-click";
+import { gameInputLocked } from "./game-input-lock";
 import {
   gridHide,
   gridRedHide,
@@ -45,6 +46,7 @@ const DBLCLICK_PX2 = 20 * 20;
 
 const gameInputEnabled = (): boolean =>
   gameState.gameStarted &&
+  !gameInputLocked() &&
   (!challengeDisablesPausedInteraction() || !gameState.paused);
 
 const deleteModeLocked = (): boolean =>

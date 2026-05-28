@@ -46,12 +46,25 @@ let developerModeButtonSuppressed = false;
 let developerModeAccessGranted = false;
 let developerModeButtonVisible = false;
 let helpButtonVisible = true;
+let helpButtonInteractive = true;
 
 const RIGHT_CONTROL_BOTTOM = 16;
 const RIGHT_CONTROL_SLOT = 56;
 
 const rightControlBottom = (slot: number): string =>
-  `${RIGHT_CONTROL_BOTTOM + slot * RIGHT_CONTROL_SLOT}px`;
+  `calc(env(safe-area-inset-bottom, 0px) + ${RIGHT_CONTROL_BOTTOM + slot * RIGHT_CONTROL_SLOT}px)`;
+
+const safeBottomOffset = (offset: number): string =>
+  `calc(env(safe-area-inset-bottom, 0px) + ${offset}px)`;
+
+const safeTopOffset = (offset: number): string =>
+  `calc(env(safe-area-inset-top, 0px) + ${offset}px)`;
+
+const safeLeftOffset = (offset: number): string =>
+  `calc(env(safe-area-inset-left, 0px) + ${offset}px)`;
+
+const safeRightOffset = (offset: number): string =>
+  `calc(env(safe-area-inset-right, 0px) + ${offset}px)`;
 
 const setRightControlSlot = (
   button: HTMLElement,
@@ -79,7 +92,9 @@ const layoutRightControls = (): void => {
 
 const updateHomeActionPosition = (): void => {
   const bridgeSlotVisible = lakes.length > 0 || session.bridges > 0;
-  homeActionIndicator.style.bottom = bridgeSlotVisible ? "308px" : "212px";
+  homeActionIndicator.style.bottom = safeBottomOffset(
+    bridgeSlotVisible ? 308 : 212,
+  );
 };
 
 type ActiveRuleChallenge = ChallengeDefinition & { id: RuleChallengeId };
@@ -350,6 +365,9 @@ export const helpOverlay = createElement();
 export const helpPanel = createElement();
 export const helpCloseButton = createElement("button");
 export const helpMenuButton = createElement("button");
+export const helpFullscreenButton = createElement("button");
+const helpFullscreenSvg = createSvgElement("svg");
+const helpFullscreenSvgPath = createSvgElement("path");
 
 type AudioMode = "all" | "muted" | "music" | "sfx";
 
@@ -381,6 +399,19 @@ export const setAudioModeButton = (mode: AudioMode): void => {
     mode === "muted" ? "#f7f0eb" : mode === "all" ? colors.house : "#edf7f4";
 };
 
+export const updateHelpFullscreenButton = (active: boolean): void => {
+  helpFullscreenButton.title = active ? "Exit fullscreen" : "Enter fullscreen";
+  helpFullscreenButton.setAttribute("aria-label", helpFullscreenButton.title);
+  helpFullscreenButton.style.background = active ? colors.ui : "#fff";
+  helpFullscreenButton.style.color = active ? "#fff" : colors.ui;
+  helpFullscreenSvgPath.setAttribute(
+    "d",
+    active
+      ? "M6 3v3H3M10 3v3h3M10 13v-3h3M6 13v-3H3"
+      : "M6.5 3.5h-3v3M9.5 3.5h3v3M12.5 9.5v3h-3M6.5 12.5h-3v-3",
+  );
+};
+
 export const setGameplayControlsVisible = (visible: boolean): void => {
   gameplayControlsVisible = visible;
   const deleteVisible = visible && !challengeDisablesDelete();
@@ -402,9 +433,19 @@ export const setGameplayControlsVisible = (visible: boolean): void => {
 
 export const setHelpButtonVisible = (visible: boolean): void => {
   helpButtonVisible = visible;
-  helpButton.style.opacity = visible ? "1" : "0";
-  helpButton.style.pointerEvents = visible ? "all" : "none";
+  helpButton.style.opacity = visible ? (helpButtonInteractive ? "1" : ".42") : "0";
+  helpButton.style.pointerEvents =
+    visible && helpButtonInteractive ? "all" : "none";
   layoutRightControls();
+};
+
+export const setHelpButtonInteractive = (interactive: boolean): void => {
+  helpButtonInteractive = interactive;
+  setHelpButtonVisible(helpButtonVisible);
+};
+
+export const setHelpButtonElevated = (elevated: boolean): void => {
+  helpButton.style.zIndex = elevated ? "5" : "";
 };
 
 export const setResourceHudElevated = (elevated: boolean): void => {
@@ -426,14 +467,26 @@ export const initUi = () => {
   // body has user-select: none; to prevent text being highlighted.
   // ui black and shade colours inlined to make things smaller maybe
   styles.innerText = `
+    html {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: ${colors.grass};
+      overscroll-behavior: none;
+    }
     body {
-      position: relative;
+      position: fixed;
+      top: var(--app-top, 0px);
+      left: var(--app-left, 0px);
       font-weight: 700;
       font-family: system-ui;
       color: ${colors.ui};
       margin: 0;
-      width: 100vw;
-      height: 100vh;
+      width: var(--app-width, 100vw);
+      height: var(--app-height, 100dvh);
+      overflow: hidden;
+      touch-action: none;
       user-select: none;
     }
     button {
@@ -509,8 +562,8 @@ export const initUi = () => {
     }
     .challenge-hud {
       position: absolute;
-      top: 74px;
-      left: 16px;
+      top: calc(env(safe-area-inset-top, 0px) + 74px);
+      left: calc(env(safe-area-inset-left, 0px) + 16px);
       display: grid;
       gap: 8px;
       opacity: 0;
@@ -591,7 +644,7 @@ export const initUi = () => {
     }
     @media (max-height: 560px) {
       .challenge-hud {
-        top: 68px;
+        top: calc(env(safe-area-inset-top, 0px) + 68px);
         gap: 6px;
       }
       .challenge-hud-item {
@@ -625,8 +678,8 @@ export const initUi = () => {
     align-items: center;
     gap: 8px;
     position: absolute;
-    top: 16px;
-    left: 16px;
+    top: ${safeTopOffset(16)};
+    left: ${safeLeftOffset(16)};
     padding: 6px 14px;
     border-radius: 64px;
     background: ${colors.ui};
@@ -657,8 +710,8 @@ export const initUi = () => {
   clock.style.cssText = `
     position: absolute;
     display: grid;
-    top: 16px;
-    right: 16px;
+    top: ${safeTopOffset(16)};
+    right: ${safeRightOffset(16)};
     place-items: center;
     border-radius: 64px;
     background: ${colors.ui};
@@ -738,8 +791,8 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: 20px;
-    left: 20px;
+    bottom: ${safeBottomOffset(20)};
+    left: ${safeLeftOffset(20)};
     border-radius: 20px;
     background: ${colors.ui};
   `;
@@ -796,8 +849,8 @@ export const initUi = () => {
   pauseButton.style.cssText = `position:absolute;padding:0;pointer-events:all`;
   const layoutPauseButton = () => {
     const compact = document.body.scrollHeight < 500;
-    pauseButton.style.top = compact ? "108px" : "24px";
-    pauseButton.style.right = compact ? "20px" : "112px";
+    pauseButton.style.top = safeTopOffset(compact ? 108 : 24);
+    pauseButton.style.right = safeRightOffset(compact ? 20 : 112);
   };
   layoutPauseButton();
   addEventListener("resize", layoutPauseButton);
@@ -821,8 +874,8 @@ export const initUi = () => {
   gridRedToggleButton.append(gridRedToggleSvg);
   gridRedToggleButton.style.cssText = `
     position:absolute;
-    bottom:${rightControlBottom(2)};
-    right:16px;
+    bottom:${rightControlBottom(3)};
+    right:${safeRightOffset(16)};
     padding:0;
     pointer-events:all;
     display:grid;
@@ -839,7 +892,7 @@ export const initUi = () => {
   gridRedToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
-    right: 16px;
+    right: ${safeRightOffset(16)};
     align-items: center;
     color: #eee;
     font-size: 16px;
@@ -847,7 +900,7 @@ export const initUi = () => {
     padding: 0 64px 0 16px;
     white-space: pre;
     pointer-events: none;
-    bottom: ${rightControlBottom(2)};
+    bottom: ${rightControlBottom(3)};
     background: ${colors.red};
   `;
   gridRedToggleTooltip.style.height = "48px";
@@ -867,7 +920,7 @@ export const initUi = () => {
   gridToggleSvgPath.style.transformOrigin = "center";
   gridToggleSvg.append(gridToggleSvgPath);
   gridToggleButton.append(gridToggleSvg);
-  gridToggleButton.style.cssText = `position:absolute;bottom:${rightControlBottom(3)};right:16px;padding:0;pointer-events:all;`;
+  gridToggleButton.style.cssText = `position:absolute;bottom:${rightControlBottom(4)};right:${safeRightOffset(16)};padding:0;pointer-events:all;`;
   gridToggleButton.style.width = "48px";
   gridToggleButton.style.height = "48px";
   gridToggleButton.style.opacity = "0";
@@ -875,7 +928,7 @@ export const initUi = () => {
   gridToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
-    right: 16px;
+    right: ${safeRightOffset(16)};
     align-items: center;
     color: #eee;
     font-size: 16px;
@@ -883,7 +936,7 @@ export const initUi = () => {
     padding: 0 64px 0 16px;
     white-space: pre;
     pointer-events: none;
-    bottom: ${rightControlBottom(3)};
+    bottom: ${rightControlBottom(4)};
     background: ${colors.ui};
   `;
   gridToggleTooltip.style.height = "48px";
@@ -904,8 +957,8 @@ export const initUi = () => {
   audioModeButton.append(audioModeSvg);
   audioModeButton.style.cssText = `
     position:absolute;
-    bottom:${rightControlBottom(1)};
-    right:16px;
+    bottom:${rightControlBottom(2)};
+    right:${safeRightOffset(16)};
     padding:0;
     pointer-events:all;
     display:grid;
@@ -922,7 +975,7 @@ export const initUi = () => {
   developerModeButton.style.cssText = `
     position:absolute;
     bottom:${rightControlBottom(4)};
-    right:16px;
+    right:${safeRightOffset(16)};
     padding:0;
     pointer-events:all;
     display:grid;
@@ -944,8 +997,8 @@ export const initUi = () => {
 
   helpButton.style.cssText = `
     position:absolute;
-    bottom:16px;
-    right:16px;
+    bottom:${rightControlBottom(0)};
+    right:${safeRightOffset(16)};
     padding:0;
     pointer-events:all;
     display:grid;
@@ -980,8 +1033,8 @@ export const initUi = () => {
   helpOverlay.setAttribute("aria-hidden", "true");
 
   helpPanel.style.cssText = `
-    width:min(680px, calc(100vw - 48px));
-    max-height:calc(100vh - 48px);
+    width:min(680px, calc(var(--app-width, 100vw) - 48px));
+    max-height:calc(var(--app-height, 100dvh) - 48px);
     overflow:auto;
     box-sizing:border-box;
     padding:30px;
@@ -1072,6 +1125,7 @@ export const initUi = () => {
     <span class="help-pill">Audio: All / Mute / Music / Effects</span>
     <span class="help-pill">Grid: Auto / On</span>
     <span class="help-pill">Delete: Button / Right-click</span>
+    <span class="help-pill">Fullscreen: Menu / F</span>
     <span class="help-pill">Clock: 1x / 2x / 3x</span>
     <span class="help-pill">Pause: plan safely</span>
   `;
@@ -1088,6 +1142,7 @@ export const initUi = () => {
     <span class="help-shortcut"><span class="help-kbd">Space</span><span>Pause</span></span>
     <span class="help-shortcut"><span class="help-kbd">Esc</span><span>Menu</span></span>
     <span class="help-shortcut"><span class="help-kbd">G</span><span>Grid</span></span>
+    <span class="help-shortcut"><span class="help-kbd">F</span><span>Fullscreen</span></span>
     <span class="help-shortcut"><span class="help-kbd">D</span><span>Delete Mode</span></span>
     <span class="help-shortcut"><span class="help-kbd">M</span><span>Mute</span></span>
     <span class="help-shortcut"><span class="help-kbd">N</span><span>Next Song</span></span>
@@ -1100,6 +1155,8 @@ export const initUi = () => {
   helpActions.style.cssText = `
     display:flex;
     flex-wrap:wrap;
+    align-items:center;
+    justify-content:flex-start;
     gap:12px;
     margin-top:28px;
   `;
@@ -1126,6 +1183,31 @@ export const initUi = () => {
     pointer-events:all;
   `;
 
+  helpFullscreenSvg.setAttribute("viewBox", "0 0 16 16");
+  helpFullscreenSvg.setAttribute("width", "24");
+  helpFullscreenSvg.setAttribute("height", "24");
+  helpFullscreenSvgPath.setAttribute("fill", "none");
+  helpFullscreenSvgPath.setAttribute("stroke", "currentColor");
+  helpFullscreenSvgPath.setAttribute("stroke-width", "1.8");
+  helpFullscreenSvgPath.setAttribute("stroke-linecap", "round");
+  helpFullscreenSvgPath.setAttribute("stroke-linejoin", "round");
+  helpFullscreenSvg.append(helpFullscreenSvgPath);
+  helpFullscreenButton.replaceChildren(helpFullscreenSvg);
+  helpFullscreenButton.style.cssText = `
+    display:grid;
+    place-items:center;
+    width:44px;
+    height:44px;
+    padding:0;
+    border-radius:50%;
+    color:${colors.ui};
+    cursor:pointer;
+    flex:0 0 auto;
+    pointer-events:all;
+    box-shadow:inset 0 0 0 1px rgba(68,68,51,.16), 0 10px 26px rgba(20,24,16,.14);
+  `;
+  updateHelpFullscreenButton(false);
+
   helpCloseButton.innerText = "Continue";
   helpCloseButton.style.cssText = `
     height:48px;
@@ -1136,7 +1218,7 @@ export const initUi = () => {
     pointer-events:all;
   `;
 
-  helpActions.append(helpMenuButton, helpCloseButton);
+  helpActions.append(helpFullscreenButton, helpMenuButton, helpCloseButton);
 
   helpPanel.append(
     helpTitle,
@@ -1153,8 +1235,8 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: 116px;
-	  left: 20px;
+    bottom: ${safeBottomOffset(116)};
+	  left: ${safeLeftOffset(20)};
 	  border-radius: 20px;
 	  background: ${colors.ui};
 	  cursor: default;
@@ -1197,8 +1279,8 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: 212px;
-    left: 20px;
+    bottom: ${safeBottomOffset(212)};
+    left: ${safeLeftOffset(20)};
     border-radius: 20px;
     background: ${colors.ui};
   `;
@@ -1239,7 +1321,7 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    left: 20px;
+    left: ${safeLeftOffset(20)};
     border-radius: 20px;
     background: #f7f7f0;
     cursor: pointer;

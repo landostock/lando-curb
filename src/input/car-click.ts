@@ -5,6 +5,7 @@ import { gridPointerLayer, pinLayer } from "../gfx/layers";
 import { svgElement } from "../gfx/svg";
 import { createSvgElement } from "../gfx/svg-utils";
 import { commuters } from "../state";
+import { gameInputLocked } from "./game-input-lock";
 
 const HIT_RADIUS = 10; // SVG px — generous for tiny cars
 
@@ -109,6 +110,7 @@ const showIndicator = (
 
 export const initCarClick = (): void => {
   gridPointerLayer.addEventListener("dblclick", (event) => {
+    if (gameInputLocked()) return;
     if (challengeDisablesPausedInteraction() && gameState.paused) return;
     const coords = toSvgCoords(event);
     if (!coords) return;

@@ -1,6 +1,7 @@
 import { playUpgradeSound } from "../audio";
 import { colors } from "../gfx/colors";
 import { createElement, createSvgElement } from "../gfx/svg-utils";
+import { setGameInputLocked } from "../input/game-input-lock";
 import { lakes, session } from "../state";
 import {
   resumeHomeActionsAfterOverlay,
@@ -11,6 +12,8 @@ import {
   homeActionIndicator,
   motorwayIndicator,
   setDeveloperModeButtonSuppressed,
+  setHelpButtonElevated,
+  setHelpButtonInteractive,
   setHelpButtonVisible,
   setResourceHudElevated,
   updateInventoryCounters,
@@ -37,7 +40,7 @@ overlay.style.cssText = `
 const pickerPanel = createElement();
 pickerPanel.style.cssText = `
   position: relative;
-  width: min(780px, calc(100vw - 48px));
+  width: min(780px, calc(var(--app-width, 100vw) - 48px));
   box-sizing: border-box;
   padding: 30px;
   border-radius: 24px;
@@ -256,6 +259,7 @@ const setMapPeekOpen = (open: boolean): void => {
   overlay.style.backdropFilter = open ? "none" : "blur(8px) saturate(1.08)";
   pickerPanel.style.opacity = open ? "0" : "1";
   setPickerPanelInteractive(!open);
+  setHelpButtonInteractive(!open);
   pickerPanel.style.transform = open
     ? "translateY(8px) scale(.98)"
     : "translateY(0) scale(1)";
@@ -269,6 +273,7 @@ returnToPickerButton.addEventListener("click", () => setMapPeekOpen(false));
 export const showUpgradePicker = (onPick: () => void): boolean => {
   if (pickerOpen) return false;
   pickerOpen = true;
+  setGameInputLocked("upgrade-picker", true);
   setMapPeekOpen(false);
   resumeHomeActionsAfterPick = suspendHomeActionsForOverlay();
   clearTimeout(cleanupTimer);
@@ -286,7 +291,8 @@ export const showUpgradePicker = (onPick: () => void): boolean => {
   overlay.style.pointerEvents = "all";
   pickerPanel.style.transform = "translateY(0) scale(1)";
   setDeveloperModeButtonSuppressed(true);
-  setHelpButtonVisible(false);
+  setHelpButtonElevated(true);
+  setHelpButtonVisible(true);
   setResourceHudElevated(true);
 
   // Trigger scale animation
@@ -304,6 +310,7 @@ const hideUpgradePicker = (): void => {
   if (!pickerOpen) return;
   pickerOpen = false;
   setMapPeekOpen(false);
+  setGameInputLocked("upgrade-picker", false);
   overlay.style.opacity = "0";
   overlay.style.pointerEvents = "none";
   overlay.style.visibility = "hidden";
@@ -315,6 +322,7 @@ const hideUpgradePicker = (): void => {
     card.style.pointerEvents = "none";
   });
   setDeveloperModeButtonSuppressed(false);
+  setHelpButtonElevated(false);
   setHelpButtonVisible(true);
   setResourceHudElevated(false);
   if (resumeHomeActionsAfterPick) {

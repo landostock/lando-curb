@@ -1,3 +1,5 @@
+import { gameInputLocked } from "./input/game-input-lock";
+
 interface AudioRuntime {
   context?: AudioContext;
   master?: GainNode;
@@ -453,8 +455,9 @@ export const initAudio = (): void => {
     });
     window.addEventListener("keydown", unlockOnce, { capture: true });
     window.addEventListener("keydown", (event) => {
-      if (event.key.toLowerCase() === "m") toggleMuted();
-      if (event.key.toLowerCase() === "n") playNextMusicTrack();
+      const key = event.key.toLowerCase();
+      if (key === "m") toggleMuted();
+      if (key === "n" && !gameInputLocked()) playNextMusicTrack();
     });
   }
 

@@ -19,6 +19,7 @@ import {
   generateOstholsteinMap,
   generateRandomMap,
 } from "../logic/generate-map";
+import { requestFullscreen } from "../util/fullscreen";
 import { createChallengeIcon } from "./challenge-icon";
 import { gameoverWrapper } from "./gameover";
 import {
@@ -340,8 +341,8 @@ const initChallengeModeControls = (): void => {
   `;
   challengePanel.style.cssText = `
     position: relative;
-    width: min(760px, calc(100vw - 44px));
-    max-height: calc(100vh - 44px);
+    width: min(760px, calc(var(--app-width, 100vw) - 44px));
+    max-height: calc(var(--app-height, 100dvh) - 44px);
     overflow: auto;
     box-sizing: border-box;
     padding: 22px 24px 26px;
@@ -441,6 +442,7 @@ const initChallengeModeControls = (): void => {
   challengeStartButton.innerText = "Start Game";
   challengeStartButton.addEventListener("click", () => {
     if (!pendingChallengeIds.size) return;
+    void requestFullscreen();
     setActiveChallenges([...pendingChallengeIds]);
     setChallengePickerOpen(false);
     challengeStartAction?.();
@@ -474,6 +476,11 @@ export const showChallengeStartPicker = ({
 export const initMenu = (
   startWithMap: (map: (delay: number) => void) => void,
 ): void => {
+  const startMapWithFullscreen = (map: (delay: number) => void): void => {
+    void requestFullscreen();
+    startWithMap(map);
+  };
+
   menuWrapper.style.cssText = `
     position: absolute;
     inset: 0;
@@ -516,7 +523,9 @@ export const initMenu = (
       <circle cx="16" cy="16" r="1.6" fill="#333"/>
     </svg>
     <span>Random</span>`;
-  startButton.addEventListener("click", () => startWithMap(generateRandomMap));
+  startButton.addEventListener("click", () =>
+    startMapWithFullscreen(generateRandomMap),
+  );
   startButtonWrapper.style.opacity = "0";
 
   // Fernsehturm — Berlin
@@ -529,7 +538,9 @@ export const initMenu = (
       <line x1="6" y1="22" x2="18" y2="22" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
     <span>Berlin</span>`;
-  berlinButton.addEventListener("click", () => startWithMap(generateBerlinMap));
+  berlinButton.addEventListener("click", () =>
+    startMapWithFullscreen(generateBerlinMap),
+  );
   berlinButtonWrapper.style.opacity = "0";
 
   // Schloss Eutin — Ostholstein
@@ -551,7 +562,7 @@ export const initMenu = (
     </svg>
     <span>Ostholstein</span>`;
   ostholsteinButton.addEventListener("click", () =>
-    startWithMap(generateOstholsteinMap),
+    startMapWithFullscreen(generateOstholsteinMap),
   );
   ostholsteinButtonWrapper.style.opacity = "0";
 
