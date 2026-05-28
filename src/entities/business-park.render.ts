@@ -701,7 +701,8 @@ const laneLoopPoint = (lane: ParkLocalPoint): LoopPoint => {
   return { side: "bottom", x: clampLoopX(lane.x), y: loopBounds.bottom };
 };
 
-const entersSlotFromTop = (variant: number): boolean => variant !== 2;
+const entersSlotFromTop = (variant: number): boolean =>
+  variant === 1 || variant === 3;
 
 const parkingLoopRouteFor = (
   variant: number,
