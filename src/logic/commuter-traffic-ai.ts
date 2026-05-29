@@ -10,8 +10,8 @@ const MIN_ROAD_SPEED = 0.11;
 const MIN_YIELD_SPEED = 0.14;
 const MIN_FOLLOW_SPEED = 0.12;
 const MOTORWAY_SPEED_MULTIPLIER = 5;
-const MOTORWAY_RAMP_PX = 6;
-const MOTORWAY_SURFACE_RADIUS = 2.8;
+const MOTORWAY_FULL_BOOST_RADIUS = 2.15;
+const MOTORWAY_SURFACE_RADIUS = 3.6;
 const JUNCTION_BUSY_RADIUS2 = 12 * 12;
 const CORRIDOR_PRESSURE_RADIUS = 14;
 const CORRIDOR_LATERAL_LIMIT = 3.6;
@@ -37,11 +37,11 @@ const nearestSegmentPoint = (
   point: Point,
   start: Point,
   end: Point,
-): { distance: number; progress: number } => {
+): { distance: number } => {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const len2 = dx * dx + dy * dy;
-  if (len2 <= 0) return { distance: Infinity, progress: 0 };
+  if (len2 <= 0) return { distance: Infinity };
 
   const rawProgress =
     ((point.x - start.x) * dx + (point.y - start.y) * dy) / len2;
@@ -50,7 +50,6 @@ const nearestSegmentPoint = (
   const closestY = start.y + dy * progress;
   return {
     distance: Math.hypot(point.x - closestX, point.y - closestY),
-    progress,
   };
 };
 
@@ -59,24 +58,22 @@ const motorwayBoostForSegment = (
   start: Point,
   end: Point,
 ): MotorwaySpeedContext | undefined => {
-  const { distance, progress } = nearestSegmentPoint(c, start, end);
+  const { distance } = nearestSegmentPoint(c, start, end);
   if (distance > MOTORWAY_SURFACE_RADIUS) return undefined;
-
   const lengthPx = Math.hypot(end.x - start.x, end.y - start.y);
   if (lengthPx <= 0) return undefined;
 
-  const ramp = Math.min(0.45, MOTORWAY_RAMP_PX / lengthPx);
-  const rampIn = smoothstep(clamp01(progress / ramp));
-  const rampOut = smoothstep(clamp01((1 - progress) / ramp));
-  const endRamp = Math.min(rampIn, rampOut);
+  const fadeWidth = MOTORWAY_SURFACE_RADIUS - MOTORWAY_FULL_BOOST_RADIUS;
   const surfaceRamp =
-    1 - smoothstep(clamp01(distance / MOTORWAY_SURFACE_RADIUS));
-  const cellDistance = lengthPx / 8;
-  const targetBoost = MOTORWAY_SPEED_MULTIPLIER * cellDistance;
+    distance <= MOTORWAY_FULL_BOOST_RADIUS
+      ? 1
+      : 1 -
+        smoothstep(clamp01((distance - MOTORWAY_FULL_BOOST_RADIUS) / fadeWidth));
+  const targetBoost = MOTORWAY_SPEED_MULTIPLIER * Math.max(1, lengthPx / 8);
 
   return {
-    active: endRamp * surfaceRamp > 0.05,
-    boost: 1 + (targetBoost - 1) * endRamp * surfaceRamp,
+    active: surfaceRamp > 0.05,
+    boost: 1 + (targetBoost - 1) * surfaceRamp,
   };
 };
 

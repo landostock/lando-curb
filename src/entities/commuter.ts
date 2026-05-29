@@ -25,6 +25,10 @@ const newRail = (route: Cell[]): RailState => ({
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 const smoothstep = (value: number): number => value * value * (3 - 2 * value);
 const PARKING_WAIT_TICKS = 120;
+const WORK_APPROACH_SLOWDOWN_DISTANCE = 14;
+const WORK_APPROACH_FINAL_DISTANCE = 2;
+const WORK_APPROACH_MIN_SPEED = 0.12;
+const WORK_APPROACH_MAX_SPEED = 0.28;
 
 type WorkplaceRouteDock = "arrival" | "departure";
 
@@ -508,8 +512,23 @@ export class Commuter extends GameObjectClass {
     let targetSpeed = computeTargetSpeed(this);
     if (this.state === "toWork") {
       const remaining = this.remainingRailDistance();
-      const approach = 1 - smoothstep(clamp01((remaining - 2) / 12));
-      targetSpeed = Math.min(targetSpeed, 0.12 + 0.16 * (1 - approach));
+      if (remaining < WORK_APPROACH_SLOWDOWN_DISTANCE) {
+        const approach =
+          1 -
+          smoothstep(
+            clamp01(
+              (remaining - WORK_APPROACH_FINAL_DISTANCE) /
+                (WORK_APPROACH_SLOWDOWN_DISTANCE -
+                  WORK_APPROACH_FINAL_DISTANCE),
+            ),
+          );
+        targetSpeed = Math.min(
+          targetSpeed,
+          WORK_APPROACH_MIN_SPEED +
+            (WORK_APPROACH_MAX_SPEED - WORK_APPROACH_MIN_SPEED) *
+              (1 - approach),
+        );
+      }
     }
     smoothSpeed(this, targetSpeed);
 
