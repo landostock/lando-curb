@@ -80,6 +80,61 @@ let challengePickerOpen = false;
 let challengeStartAction: (() => void) | undefined;
 let challengeCancelAction: (() => void) | undefined;
 let pendingChallengeIds = new Set<RuleChallengeId>();
+let menuLayoutListenerBound = false;
+
+const isCompactLandscapeMenu = (): boolean => {
+  const width = document.body.clientWidth || innerWidth;
+  const height = document.body.clientHeight || innerHeight;
+  return height <= 560 && width > height;
+};
+
+const applyMenuLayout = (): void => {
+  const compact = isCompactLandscapeMenu();
+  menuWrapper.style.padding = compact
+    ? "calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-right, 0px) + 36px) calc(env(safe-area-inset-bottom, 0px) + 12px) calc(env(safe-area-inset-left, 0px) + 44px)"
+    : "10vmin";
+
+  const logoSvg = menuLogo.querySelector("svg");
+  if (logoSvg) {
+    logoSvg.setAttribute("width", compact ? "50" : "80");
+    logoSvg.setAttribute("height", compact ? "50" : "80");
+  }
+  menuLogo.style.marginBottom = compact ? "6px" : "12px";
+  menuHeader.style.fontSize = compact ? "44px" : "72px";
+  menuHeader.style.lineHeight = "1";
+
+  modeButtons.style.gridTemplateColumns = compact
+    ? "repeat(2, minmax(150px, 228px))"
+    : "repeat(2, minmax(150px, 230px))";
+  modeButtons.style.gap = compact ? "10px" : "12px";
+  modeButtons.style.marginTop = compact ? "16px" : "32px";
+
+  for (const button of [zenModeButton, challengeModeButton]) {
+    button.style.height = compact ? "46px" : "54px";
+    button.style.padding = compact ? "0 12px 0 15px" : "0 14px 0 17px";
+    button.style.fontSize = compact ? "16px" : "18px";
+  }
+
+  menuButtons.style.gridTemplateColumns = compact
+    ? "repeat(3, minmax(116px, 1fr))"
+    : "";
+  menuButtons.style.gap = compact ? "10px" : "12px";
+  menuButtons.style.marginTop = compact ? "18px" : "34px";
+  menuButtons.style.width = compact
+    ? "min(680px, calc(var(--app-width, 100vw) - 96px))"
+    : "";
+  menuButtons.style.maxWidth = compact ? "680px" : "";
+
+  for (const button of [startButton, berlinButton, ostholsteinButton]) {
+    button.style.width = compact ? "100%" : "";
+    button.style.minWidth = "0";
+    button.style.height = compact ? "48px" : "";
+    button.style.padding = compact ? "8px 13px" : "10px 18px";
+    button.style.fontSize = compact ? "18px" : "20px";
+  }
+
+  menuText1.style.display = compact ? "none" : "";
+};
 
 const updateChallengeButtons = (): void => {
   const challengeModeSelected =
@@ -476,6 +531,11 @@ export const showChallengeStartPicker = ({
 export const initMenu = (
   startWithMap: (map: (delay: number) => void) => void,
 ): void => {
+  if (!menuLayoutListenerBound) {
+    menuLayoutListenerBound = true;
+    addEventListener("resize", applyMenuLayout);
+  }
+
   const startMapWithFullscreen = (map: (delay: number) => void): void => {
     void requestFullscreen();
     startWithMap(map);
@@ -585,6 +645,7 @@ export const initMenu = (
     menuText1,
   );
 
+  applyMenuLayout();
   document.body.append(menuWrapper);
 };
 
@@ -594,6 +655,7 @@ export const showMenu = (
 ): void => {
   menuBackground.style.display = "";
   if (!menuWrapper.isConnected) document.body.append(menuWrapper);
+  applyMenuLayout();
   menuWrapper.style.pointerEvents = "none";
   updateChallengeButtons();
   menuBackground.style.clipPath = `polygon(0 0, calc(20dvw + 400px) 0, calc(20dvw + 350px) 100%, 0 100%)`;

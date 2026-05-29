@@ -12,7 +12,10 @@ import {
   cellIsBlocked,
   houseInCell,
 } from "../logic/placement-obstacles";
-import { removePath } from "../logic/remove-street";
+import {
+  type RemovalLayer,
+  removePath,
+} from "../logic/remove-street";
 import { streets } from "../state";
 import type { Cell, Pixel } from "../types";
 import {
@@ -35,6 +38,7 @@ import * as pathDraw from "./path-draw";
 let startCell: Cell | null = null;
 let isDragging = false;
 let removeDragPrev: Cell | null = null;
+let removeDragLayer: RemovalLayer | null = null;
 
 // Double-click detection: suppress the second pointerdown so the path indicator
 // doesn't flash when the user double-clicks to reactivate a car.
@@ -60,6 +64,7 @@ const cancelPointerInteraction = (): void => {
   startCell = null;
   isDragging = false;
   removeDragPrev = null;
+  removeDragLayer = null;
 };
 
 const snapCellTo45 = (start: Cell, px: Pixel): Cell => {
@@ -140,10 +145,16 @@ const nearestRemovableStreetEdge = (
   return best?.points;
 };
 
+const lockRemovalLayer = (layer?: RemovalLayer): void => {
+  if (!removeDragLayer && layer) removeDragLayer = layer;
+};
+
 const removePathAtPointer = (cell: Cell, pointerInRect: Pixel): void => {
   const edge = nearestRemovableStreetEdge(cell, pointerInRect);
-  if (edge) removePath(edge[0], edge[1]);
-  else removePath(cell);
+  const result = edge
+    ? removePath(edge[0], edge[1], removeDragLayer ?? undefined)
+    : removePath(cell, undefined, removeDragLayer ?? undefined);
+  lockRemovalLayer(result.layer);
 };
 
 const handlePointerdown = (event: PointerEvent): void => {
@@ -215,6 +226,7 @@ const handlePointerup = (event: PointerEvent): void => {
     else gridHide();
     gridRedHide();
     removeDragPrev = null;
+    removeDragLayer = null;
     return;
   }
 
@@ -229,6 +241,7 @@ const handlePointerup = (event: PointerEvent): void => {
   startCell = null;
   isDragging = false;
   removeDragPrev = null;
+  removeDragLayer = null;
 };
 
 const applyPathDrawResult = (
@@ -260,7 +273,12 @@ const handlePointermove = (event: PointerEvent): void => {
   // Removal mode (right-click or locked red grid)
   if (event.buttons === 2 || (event.buttons === 1 && deleteModeLocked())) {
     gridRedShow();
-    removePath(cell, removeDragPrev ?? undefined);
+    const result = removePath(
+      cell,
+      removeDragPrev ?? undefined,
+      removeDragLayer ?? undefined,
+    );
+    lockRemovalLayer(result.layer);
     removeDragPrev = cell;
     return;
   }
@@ -324,7 +342,12 @@ export const initPointer = (): void => {
       gridHide();
     }
   });
-  svgContainerElement.addEventListener("pointerup", () => gridRedHide());
+  svgContainerElement.addEventListener("pointerup", () => {
+    gridRedHide();
+    removeDragPrev = null;
+    removeDragLayer = null;
+  });
+  svgContainerElement.addEventListener("pointercancel", cancelPointerInteraction);
   svgContainerElement.addEventListener("contextmenu", (e) =>
     e.preventDefault(),
   );

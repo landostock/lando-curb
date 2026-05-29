@@ -848,9 +848,8 @@ export const initUi = () => {
 
   pauseButton.style.cssText = `position:absolute;padding:0;pointer-events:all`;
   const layoutPauseButton = () => {
-    const compact = document.body.scrollHeight < 500;
-    pauseButton.style.top = safeTopOffset(compact ? 108 : 24);
-    pauseButton.style.right = safeRightOffset(compact ? 20 : 112);
+    pauseButton.style.top = safeTopOffset(24);
+    pauseButton.style.right = safeRightOffset(112);
   };
   layoutPauseButton();
   addEventListener("resize", layoutPauseButton);

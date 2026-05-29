@@ -17,6 +17,13 @@ const streetTouchesCell = (street: Street, { x, y }: Cell): boolean => {
   return (x === p0.x && y === p0.y) || (x === p1.x && y === p1.y);
 };
 
+export type RemovalLayer = "motorway" | "street";
+
+export interface RemovePathResult {
+  layer?: RemovalLayer;
+  removed: boolean;
+}
+
 const commuterIsOnStreet = (
   street: Street,
   c: (typeof commuters)[number],
@@ -81,8 +88,12 @@ const isStreetStillNeeded = (street: Street): boolean => {
   return false;
 };
 
-export const removePath = (cell: Cell, prevCell?: Cell): void => {
-  if (challengeDisablesDelete()) return;
+export const removePath = (
+  cell: Cell,
+  prevCell?: Cell,
+  layerLock?: RemovalLayer,
+): RemovePathResult => {
+  if (challengeDisablesDelete()) return { removed: false };
   // Edge mode: dragging from an adjacent cell — remove only the street between them.
   // Otherwise (single click, same cell, or non-adjacent jump): remove every street at `cell`.
   const useEdgeMode = !!prevCell && isStreetEdge(prevCell, cell);
@@ -94,10 +105,10 @@ export const removePath = (cell: Cell, prevCell?: Cell): void => {
       : streetTouchesCell(path, cell);
   });
 
-  if (!streetsToRemove.length) return;
+  if (!streetsToRemove.length) return { removed: false };
 
   const motorwaysToRemove = streetsToRemove.filter((street) => street.motorway);
-  if (motorwaysToRemove.length) {
+  if (layerLock !== "street" && motorwaysToRemove.length) {
     for (const street of motorwaysToRemove) {
       street.motorway = false;
       if (!developerMode) session.motorways++;
@@ -105,10 +116,15 @@ export const removePath = (cell: Cell, prevCell?: Cell): void => {
     updateInventoryCounters();
     playRemoveThup();
     commitStreetChanges();
-    return;
+    return { layer: "motorway", removed: true };
   }
 
-  for (const streetToRemove of streetsToRemove) {
+  if (layerLock === "motorway") return { removed: false };
+
+  const plainStreetsToRemove = streetsToRemove.filter((street) => !street.motorway);
+  if (!plainStreetsToRemove.length) return { removed: false };
+
+  for (const streetToRemove of plainStreetsToRemove) {
     if (streetToRemove.pendingRemoval) continue;
     streetToRemove.markPendingRemoval();
     hurryCommutersHomeFor(streetToRemove);
@@ -116,6 +132,7 @@ export const removePath = (cell: Cell, prevCell?: Cell): void => {
 
   // Streets only marked pending — don't flush atWork commuters yet.
   commitStreetChanges();
+  return { layer: "street", removed: true };
 };
 
 export const cleanupPendingStreets = (): void => {
