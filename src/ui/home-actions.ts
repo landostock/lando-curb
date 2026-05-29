@@ -46,6 +46,13 @@ const GEOMETRY_EPSILON = 1e-6;
 
 const shell = createElement();
 const panel = createElement();
+const actionBar = createElement();
+const actionCopy = createElement();
+const actionTitle = createElement();
+const actionHint = createElement();
+const actionControls = createElement();
+const barBackButton = createElement("button");
+const barCloseButton = createElement("button");
 const title = createElement();
 const closeButton = createElement("button");
 const body = createElement();
@@ -88,6 +95,7 @@ const houseIsReady = (house: House): boolean =>
 
 const setStatus = (text: string): void => {
   status.innerText = text;
+  actionHint.innerText = text;
 };
 
 const clearReadyCheck = (): void => {
@@ -327,6 +335,56 @@ const setPanelInteractive = (interactive: boolean): void => {
   panel.style.pointerEvents = interactive ? "all" : "none";
 };
 
+const hideActionBar = (): void => {
+  actionBar.style.display = "none";
+  actionBar.style.opacity = "0";
+  actionBar.style.pointerEvents = "none";
+  actionBar.style.transitionDelay = "0s";
+};
+
+const showActionBar = (
+  heading: string,
+  hint: string,
+  backLabel: string,
+  options: { queued?: boolean } = {},
+): void => {
+  const morphFromPanel =
+    panel.style.display !== "none" && actionBar.style.display === "none";
+  if (morphFromPanel) {
+    panel.style.opacity = "0";
+    panel.style.transform = "translateX(-50%) translateY(-8px) scale(.96)";
+    setTimeout(() => {
+      if (actionBar.style.display !== "none") panel.style.display = "none";
+    }, 150);
+  } else {
+    panel.style.display = "none";
+  }
+  setPanelInteractive(false);
+  actionTitle.innerText = heading;
+  barBackButton.innerText = backLabel;
+  barBackButton.title = backLabel;
+  barBackButton.setAttribute("aria-label", backLabel);
+  barBackButton.style.display = options.queued ? "none" : "";
+  barCloseButton.title = options.queued ? "Cancel queued action" : "Close";
+  barCloseButton.setAttribute(
+    "aria-label",
+    options.queued ? "Cancel queued action" : "Close Home Action",
+  );
+  setStatus(hint);
+  actionBar.style.display = "grid";
+  actionBar.style.pointerEvents = "all";
+  actionBar.style.opacity = "0";
+  actionBar.style.transform = morphFromPanel
+    ? "translate(-50%, 8px) scale(.96)"
+    : "translate(-50%, -6px) scale(.98)";
+  actionBar.style.transitionDelay = morphFromPanel ? ".04s" : "0s";
+  requestAnimationFrame(() => {
+    if (actionBar.style.display === "none") return;
+    actionBar.style.opacity = "1";
+    actionBar.style.transform = "translate(-50%, 0) scale(1)";
+  });
+};
+
 const showShell = (): void => {
   shell.style.display = "block";
   shell.style.opacity = "1";
@@ -340,6 +398,7 @@ const hideShell = (): void => {
   shell.style.pointerEvents = "none";
   shell.style.display = "none";
   setPanelInteractive(false);
+  hideActionBar();
   setDeveloperModeButtonSuppressed(false);
 };
 
@@ -353,7 +412,10 @@ const dockPanel = (docked: boolean): void => {
     ? "min(320px, calc(var(--app-width, 100vw) - 28px))"
     : "min(440px, calc(var(--app-width, 100vw) - 32px))";
   panel.style.transform = docked ? "translateX(0)" : "translateX(-50%)";
-  panel.style.opacity = docked ? ".76" : "1";
+  panel.style.opacity = docked ? ".96" : "1";
+  panel.style.display = "";
+  setPanelInteractive(true);
+  hideActionBar();
 };
 
 const holdHouse = (house: House, held: boolean): void => {
@@ -430,13 +492,16 @@ const renderSwap = (): void => {
   placement = null;
   pendingMove = null;
   hidePlacementMarker();
-  dockPanel(true);
+  showActionBar(
+    "Swap Houses",
+    "Click two houses. The swap happens immediately when both are home.",
+    "Back",
+  );
   setTitle("Swap Houses", "M7 8h10M14 5l3 3-3 3M17 16H7M10 13l-3 3 3 3");
   body.replaceChildren();
   primaryButton.style.display = "none";
   secondaryButton.innerText = "Back";
   secondaryButton.style.display = "";
-  setStatus("Click two houses. The swap happens immediately when both are home.");
 };
 
 const renderMovePick = (): void => {
@@ -450,13 +515,16 @@ const renderMovePick = (): void => {
   placement = null;
   pendingMove = null;
   hidePlacementMarker();
-  dockPanel(true);
+  showActionBar(
+    "Move House",
+    "Click a house. Demolition starts when its cars are home.",
+    "Back",
+  );
   setTitle("Move House", "M4 11 12 5l8 6M7 10v8h10v-8M10 18v-4h4v4");
   body.replaceChildren();
   primaryButton.style.display = "none";
   secondaryButton.innerText = "Back";
   secondaryButton.style.display = "";
-  setStatus("Click a house. Demolition starts when its cars are home.");
 };
 
 const candidateFacing = (cell: Cell): Direction | null => {
@@ -482,13 +550,12 @@ const renderMovePlace = (): void => {
   placement = null;
   hidePlacementMarker();
   showRebuildGrid();
-  dockPanel(true);
+  showActionBar("Place House", "Click an open field.", "Undo");
   setTitle("Place House", "M5 12h14M12 5v14M7 9l5-4 5 4");
   body.replaceChildren();
   primaryButton.style.display = "none";
   secondaryButton.innerText = "Undo Demolition";
   secondaryButton.style.display = "";
-  setStatus("Click an open field.");
 };
 
 const swapWouldViolateColorLock = (a: House, b: House): boolean =>
@@ -589,9 +656,16 @@ const close = (): void => {
 const hideQueuedActionWindow = (): void => {
   hideRebuildGrid();
   hidePlacementMarker();
-  dockPanel(false);
   mode = "closed";
-  hideShell();
+  showShell();
+  showActionBar(
+    queuedSwap ? "Swap Queued" : "Demolition Queued",
+    queuedSwap
+      ? "Waiting until both driveways are clear."
+      : "Waiting until the driveway is clear.",
+    "Back",
+    { queued: true },
+  );
 };
 
 export const suspendHomeActionsForOverlay = (): boolean => {
@@ -608,7 +682,19 @@ export const resumeHomeActionsAfterOverlay = (): void => {
   suspendedForOverlay = false;
   if (mode === "closed" || queuedSwap || queuedMoveHouse) return;
   showShell();
-  if (mode !== "choose") dockPanel(true);
+  if (mode !== "choose") {
+    showActionBar(
+      mode === "swap"
+        ? "Swap Houses"
+        : mode === "movePick"
+          ? "Move House"
+          : "Place House",
+      actionHint.innerText,
+      mode === "movePlace" ? "Undo" : "Back",
+    );
+  } else {
+    dockPanel(false);
+  }
   if (mode === "movePlace") {
     showRebuildGrid();
     if (placement) showPlacementMarker(placement.cell, true);
@@ -712,6 +798,13 @@ const handlePrimary = (): void => {
   if (mode === "swap") confirmSwap();
   else if (mode === "movePick") confirmDemolition();
   else if (mode === "movePlace") confirmBuild();
+};
+
+const handleSecondary = (): void => {
+  if (mode === "movePlace") {
+    restorePendingMove();
+    renderChoose();
+  } else renderChoose();
 };
 
 export const handleHomeActionCellClick = (cell: Cell): boolean => {
@@ -821,12 +914,88 @@ export const initHomeActions = (): void => {
     pointer-events:none;
     transition:opacity .16s ease, transform .22s ease, right .22s ease, left .22s ease, width .22s ease;
   `;
-  panel.addEventListener("mouseenter", () => {
-    if (mode !== "choose" && mode !== "closed") panel.style.opacity = "1";
-  });
-  panel.addEventListener("mouseleave", () => {
-    if (mode !== "choose" && mode !== "closed") panel.style.opacity = ".76";
-  });
+  actionBar.style.cssText = `
+    position:absolute;
+    top:calc(env(safe-area-inset-top, 0px) + 8px);
+    left:50%;
+    width:min(560px, calc(var(--app-width, 100vw) - 28px));
+    min-height:44px;
+    box-sizing:border-box;
+    padding:7px 8px 7px 14px;
+    display:none;
+    grid-template-columns:minmax(0, 1fr) auto;
+    align-items:center;
+    gap:12px;
+    border-radius:16px;
+    background:#eef3e4;
+    color:${colors.ui};
+    box-shadow:0 14px 40px rgba(20,24,16,.18), inset 0 0 0 1px rgba(68,68,51,.1);
+    pointer-events:none;
+    opacity:0;
+    transform:translate(-50%, -6px) scale(.98);
+    transform-origin:top center;
+    transition:opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1);
+  `;
+  actionCopy.style.cssText = `
+    min-width:0;
+    display:grid;
+    gap:1px;
+    justify-items:center;
+    text-align:center;
+  `;
+  actionTitle.style.cssText = `
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:13px;
+    line-height:1;
+    font-weight:900;
+    letter-spacing:.6px;
+    text-transform:uppercase;
+  `;
+  actionHint.style.cssText = `
+    max-width:min(620px, calc(var(--app-width, 100vw) - 136px));
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:11px;
+    line-height:1.12;
+    font-weight:650;
+    color:rgba(68,68,51,.78);
+  `;
+  actionControls.style.cssText = `
+    display:flex;
+    align-items:center;
+    gap:6px;
+  `;
+  barBackButton.style.cssText = `
+    min-width:54px;
+    height:30px;
+    padding:0 12px;
+    border-radius:15px;
+    background:#fff;
+    font-size:12px;
+    line-height:1;
+    pointer-events:all;
+    box-shadow:inset 0 0 0 1px rgba(68,68,51,.14), 0 3px 8px rgba(20,24,16,.08);
+  `;
+  barCloseButton.innerText = "X";
+  barCloseButton.title = "Close";
+  barCloseButton.setAttribute("aria-label", "Close Home Action");
+  barCloseButton.style.cssText = `
+    width:30px;
+    height:30px;
+    padding:0;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:#fff;
+    font-size:15px;
+    line-height:1;
+    pointer-events:all;
+    box-shadow:inset 0 0 0 1px rgba(68,68,51,.14), 0 3px 8px rgba(20,24,16,.08);
+  `;
   title.style.cssText = `
     display:flex;
     align-items:center;
@@ -898,14 +1067,14 @@ export const initHomeActions = (): void => {
   moveButton.addEventListener("click", renderMovePick);
   closeButton.addEventListener("click", close);
   primaryButton.addEventListener("click", handlePrimary);
-  secondaryButton.addEventListener("click", () => {
-    if (mode === "movePlace") {
-      restorePendingMove();
-      renderChoose();
-    } else renderChoose();
-  });
+  secondaryButton.addEventListener("click", handleSecondary);
+  barBackButton.addEventListener("click", handleSecondary);
+  barCloseButton.addEventListener("click", close);
+  actionCopy.append(actionTitle, actionHint);
+  actionControls.append(barBackButton, barCloseButton);
+  actionBar.append(actionCopy, actionControls);
   panel.append(title, closeButton, body, status, primaryButton, secondaryButton);
-  shell.append(panel);
+  shell.append(actionBar, panel);
   document.body.append(shell);
   homeActionIndicator.addEventListener("click", open);
 };
