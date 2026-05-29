@@ -108,7 +108,7 @@ export const removePath = (
   if (!streetsToRemove.length) return { removed: false };
 
   const motorwaysToRemove = streetsToRemove.filter((street) => street.motorway);
-  if (layerLock !== "street" && motorwaysToRemove.length) {
+  if (motorwaysToRemove.length) {
     for (const street of motorwaysToRemove) {
       street.motorway = false;
       if (!developerMode) session.motorways++;

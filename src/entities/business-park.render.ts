@@ -77,6 +77,7 @@ const roundness = 2;
 const borderLineThickness = 1;
 const parkingFraction = 0.56;
 const parkingInset = 0.58;
+const STATUS_RING_CIRCUMFERENCE = 12.56; // Math.PI * 4, r=2
 
 interface ParkLayout {
   x: number;
@@ -401,7 +402,7 @@ function addStatusPins(rs: BusinessParkRenderState, l: ParkLayout): void {
   rs.warnCircleBg.setAttribute("stroke-linecap", "square");
   rs.warnCircleBg.setAttribute("r", String(2));
   rs.warnCircleBg.setAttribute("stroke", colors.ui);
-  rs.warnCircleBg.setAttribute("opacity", String(0.2));
+  rs.warnCircleBg.setAttribute("opacity", "0");
   rs.warnCircleBg.setAttribute("transform", "scale(1.2) translate(0 -5.3)");
   rs.pinSvg.append(rs.warnCircleBg);
 
@@ -413,8 +414,9 @@ function addStatusPins(rs: BusinessParkRenderState, l: ParkLayout): void {
   rs.warnCircle.setAttribute("stroke", colors.red);
   rs.warnCircle.style.willChange = "stroke-dashoffset";
   rs.warnCircle.style.transition = "stroke-dashoffset .3s .1s";
-  rs.warnCircle.setAttribute("stroke-dasharray", String(12.56));
-  rs.warnCircle.setAttribute("stroke-dashoffset", String(12.56));
+  rs.warnCircle.setAttribute("stroke-dasharray", String(STATUS_RING_CIRCUMFERENCE));
+  rs.warnCircle.setAttribute("stroke-dashoffset", String(STATUS_RING_CIRCUMFERENCE));
+  rs.warnCircle.setAttribute("opacity", "0");
   rs.warnCircle.setAttribute(
     "transform",
     "scale(1.2) translate(0 -5.3) rotate(-90)",
@@ -442,7 +444,7 @@ function addStatusPins(rs: BusinessParkRenderState, l: ParkLayout): void {
   rs.trendingCircle.setAttribute("stroke", "#2a2");
   rs.trendingCircle.style.willChange = "stroke-dashoffset";
   rs.trendingCircle.style.transition = "stroke-dashoffset .3s";
-  rs.trendingCircle.setAttribute("stroke-dasharray", String(12.56));
+  rs.trendingCircle.setAttribute("stroke-dasharray", String(STATUS_RING_CIRCUMFERENCE));
   rs.trendingCircle.setAttribute("stroke-dashoffset", "0");
   rs.trendingCircle.setAttribute("opacity", "0");
   rs.trendingCircle.setAttribute(
@@ -905,25 +907,38 @@ export function updateDemandDisplay(bp: BusinessPark): void {
 export function showWarn(bp: BusinessPark): void {
   const rs = requireRenderState(bp);
   rs.pinSvg.style.opacity = String(1);
+  rs.warnCircleBg.setAttribute("opacity", "0.2");
+  rs.warnCircle.setAttribute("opacity", "1");
   rs.warnCircle.style.transition = "stroke-dashoffset .4s .8s";
   rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1)`;
   rs.pinSvg.style.transition = `all .8s cubic-bezier(.5, 2, .5, 1)`;
   setTimeout(() => {
-    rs.warnCircle.style.transition = "stroke-dashoffset .4s";
+    if (bp.rs === rs && bp.hasWarn) {
+      rs.warnCircle.style.transition = "stroke-dashoffset .4s";
+    }
   }, 1000);
 }
 
 export function hideWarn(bp: BusinessPark): void {
   const rs = requireRenderState(bp);
-  rs.pinSvg.style.opacity = String(0);
+  rs.warnCircleBg.setAttribute("opacity", "0");
+  rs.warnCircle.setAttribute("opacity", "0");
+  rs.warnCircle.setAttribute("stroke-dashoffset", String(STATUS_RING_CIRCUMFERENCE));
   rs.warnCircle.style.transition = `stroke-dashoffset .3s`;
-  rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(0)`;
-  rs.pinSvg.style.transition = `all .8s cubic-bezier(.5, 2, .5, 1) .4s`;
+  rs.prevProgress = 0;
+  if (bp.trending || bp.popular) {
+    rs.pinSvg.style.opacity = "1";
+    rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1)`;
+    rs.pinSvg.style.transition = `all .25s ease`;
+  } else {
+    rs.pinSvg.style.opacity = String(0);
+    rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(0)`;
+    rs.pinSvg.style.transition = `all .8s cubic-bezier(.5, 2, .5, 1) .4s`;
+  }
 }
 
 export function updateWarn(bp: BusinessPark): void {
   const rs = requireRenderState(bp);
-  const fullCircle = 12.56; // Math.PI * 4
   const { demandPinCap, demandTimerMax } = getSpawningConfig();
   // Circle fills as timer depletes: full circle = timer at 0
   const timerFraction = bp.demandTimer / demandTimerMax;
@@ -932,17 +947,22 @@ export function updateWarn(bp: BusinessPark): void {
     bp.demand > demandPinCap
       ? 1 - timerFraction
       : (warnFraction - timerFraction) / warnFraction;
+  const clampedProgress = Math.min(1, Math.max(0, progress));
   const dashoffset =
-    fullCircle - fullCircle * Math.min(1, Math.max(0, progress));
+    STATUS_RING_CIRCUMFERENCE - STATUS_RING_CIRCUMFERENCE * clampedProgress;
 
+  rs.warnCircleBg.setAttribute("opacity", "0.2");
+  rs.warnCircle.setAttribute("opacity", "1");
   rs.warnCircle.setAttribute("stroke-dashoffset", String(dashoffset));
 
   const prev = rs.prevProgress;
-  const curr = Math.round(progress * 100);
+  const curr = Math.round(clampedProgress * 100);
   if (curr > prev) {
     rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1.2)`;
     setTimeout(() => {
-      rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1)`;
+      if (bp.rs === rs && (bp.hasWarn || bp.trending || bp.popular)) {
+        rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1)`;
+      }
     }, 200);
   }
 
@@ -966,23 +986,37 @@ function hideTrending(bp: BusinessPark): void {
   const rs = requireRenderState(bp);
   rs.trendingCircleBg.setAttribute("opacity", "0");
   rs.trendingCircle.setAttribute("opacity", "0");
-  rs.trendingCircle.setAttribute("stroke-dashoffset", String(12.56));
+  rs.trendingCircle.setAttribute(
+    "stroke-dashoffset",
+    String(STATUS_RING_CIRCUMFERENCE),
+  );
   rs.pinBubble.setAttribute("fill", "#fff");
+  if (!bp.hasWarn && !bp.popular) {
+    rs.pinSvg.style.opacity = "0";
+    rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(0)`;
+  }
 }
 
 function updateTrending(bp: BusinessPark): void {
   const rs = requireRenderState(bp);
-  const fullCircle = 12.56;
   const cfg = getSpawningConfig();
   // Circle drains as timer runs out: full = just started, empty = expired
-  const remaining = bp.trendingTimer / cfg.trendingWindow;
-  const dashoffset = fullCircle * (1 - remaining);
+  const remaining = Math.min(1, Math.max(0, bp.trendingTimer / cfg.trendingWindow));
+  const dashoffset = STATUS_RING_CIRCUMFERENCE * (1 - remaining);
+  rs.trendingCircleBg.setAttribute("opacity", "0.2");
+  rs.trendingCircle.setAttribute("opacity", "1");
   rs.trendingCircle.setAttribute("stroke-dashoffset", String(dashoffset));
 }
 
 function showPopular(bp: BusinessPark): void {
   const rs = requireRenderState(bp);
   rs.pinBubble.setAttribute("fill", "#fff");
+  rs.warnCircleBg.setAttribute("opacity", "0");
+  rs.warnCircle.setAttribute("opacity", "0");
+  rs.trendingCircleBg.setAttribute("opacity", "0");
+  rs.trendingCircle.setAttribute("opacity", "0");
+  rs.pinSvg.style.opacity = "1";
+  rs.pinSvg.style.transform = `translate(${rs.pinSvg.translate}) scale(1)`;
   // Star scales in
   rs.starSvg.setAttribute("transform", "translate(0 -6) scale(1)");
   // Celebration bounce on building
