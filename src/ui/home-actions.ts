@@ -918,7 +918,7 @@ export const initHomeActions = (): void => {
     position:absolute;
     top:calc(env(safe-area-inset-top, 0px) + 8px);
     left:50%;
-    width:min(560px, calc(var(--app-width, 100vw) - 28px));
+    width:min(var(--home-action-bar-max, 560px), calc(var(--app-width, 100vw) - var(--home-action-bar-side-clear, 28px)));
     min-height:44px;
     box-sizing:border-box;
     padding:7px 8px 7px 14px;

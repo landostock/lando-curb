@@ -68,12 +68,41 @@ const startH = (board.height + 2) * gridCellSize;
 const endW = gridSvgWidth * 0.95;
 const endH = gridSvgHeight * 0.95;
 let maxViewEntityCount = 0;
+let currentViewW = startW;
+let currentViewH = startH;
 
-const setVB = (w: number, h: number) =>
+const compactMapViewport = (): boolean => {
+  const width = document.body.clientWidth || innerWidth;
+  const height = document.body.clientHeight || innerHeight;
+  return width > height && (height <= 700 || (width <= 1180 && height <= 900));
+};
+
+const shapedViewBox = (w: number, h: number): { w: number; h: number } => {
+  if (!compactMapViewport()) return { w, h };
+
+  const width = document.body.clientWidth || innerWidth;
+  const height = document.body.clientHeight || innerHeight;
+  const aspect = width / Math.max(1, height);
+  const minW = (board.width + 0.9) * gridCellSize;
+  const minH = (board.height + 0.9) * gridCellSize;
+  const targetH = Math.max(minH, h * 0.88);
+  const targetW = Math.max(minW, targetH * Math.min(2.05, aspect), w * 0.92);
+
+  return {
+    w: Math.min(gridSvgWidth * 0.98, targetW),
+    h: Math.min(gridSvgHeight * 0.98, targetH),
+  };
+};
+
+const setVB = (w: number, h: number) => {
+  currentViewW = w;
+  currentViewH = h;
+  const shaped = shapedViewBox(w, h);
   svgElement.setAttribute(
     "viewBox",
-    `${(gridSvgWidth - w) / 2} ${(gridSvgHeight - h) / 2} ${w} ${h}`,
+    `${(gridSvgWidth - shaped.w) / 2} ${(gridSvgHeight - shaped.h) / 2} ${shaped.w} ${shaped.h}`,
   );
+};
 
 export const updateViewBox = (entityCount: number): void => {
   maxViewEntityCount = Math.max(maxViewEntityCount, entityCount);
@@ -85,3 +114,5 @@ export const resetViewBox = (): void => {
   maxViewEntityCount = 0;
   setVB(startW, startH);
 };
+
+addEventListener("resize", () => setVB(currentViewW, currentViewH));

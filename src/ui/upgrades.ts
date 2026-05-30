@@ -40,9 +40,9 @@ overlay.style.cssText = `
 const pickerPanel = createElement();
 pickerPanel.style.cssText = `
   position: relative;
-  width: min(780px, calc(var(--app-width, 100vw) - 48px));
+  width: var(--upgrade-panel-width, min(780px, calc(var(--app-width, 100vw) - 48px)));
   box-sizing: border-box;
-  padding: 30px;
+  padding: var(--upgrade-panel-padding, 30px);
   border-radius: 24px;
   background: #eef3e4;
   color: ${colors.ui};
@@ -91,7 +91,7 @@ returnToPickerButton.innerText = "Upgrades";
 const pickerTitle = createElement();
 pickerTitle.style.cssText = `
   margin: 0;
-  font-size: 38px;
+  font-size: var(--upgrade-title-size, 38px);
   line-height: 1;
   letter-spacing: 0;
 `;
@@ -101,7 +101,7 @@ const pickerCopy = createElement();
 pickerCopy.style.cssText = `
   margin-top: 10px;
   max-width: 560px;
-  font-size: 16px;
+  font-size: var(--upgrade-copy-size, 16px);
   line-height: 1.45;
 `;
 pickerCopy.innerText = "Pick the tool that best rescues the shape of your city.";
@@ -110,8 +110,8 @@ const optionsGrid = createElement();
 optionsGrid.style.cssText = `
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 14px;
-  margin-top: 24px;
+  gap: var(--upgrade-grid-gap, 14px);
+  margin-top: var(--upgrade-grid-margin, 24px);
 `;
 
 pickerPanel.append(mapPeekButton, pickerTitle, pickerCopy, optionsGrid);
@@ -180,10 +180,10 @@ const createCard = (
     display: grid;
     place-items: center;
     gap: 12px;
-    min-height: 164px;
-    padding: 18px 14px;
+    min-height: var(--upgrade-card-min-height, 164px);
+    padding: var(--upgrade-card-padding, 18px 14px);
     font-size: 15px;
-    border-radius: 18px;
+    border-radius: var(--upgrade-card-radius, 18px);
     background: #fff;
     pointer-events: all;
     transform: translateY(14px) scale(.96);
@@ -202,17 +202,17 @@ const createCard = (
   iconFrame.style.cssText = `
     display:grid;
     place-items:center;
-    width:74px;
-    height:74px;
-    border-radius:22px;
+    width:var(--upgrade-icon-frame, 74px);
+    height:var(--upgrade-icon-frame, 74px);
+    border-radius:var(--upgrade-icon-radius, 22px);
     background:#f7f7f0;
     box-shadow:inset 0 0 0 1px rgba(68,68,51,.08);
   `;
 
   const iconSvg = createSvgElement("svg");
   iconSvg.setAttribute("viewBox", "0 0 24 24");
-  iconSvg.setAttribute("width", "54");
-  iconSvg.setAttribute("height", "54");
+  iconSvg.style.width = "var(--upgrade-icon-size, 54px)";
+  iconSvg.style.height = "var(--upgrade-icon-size, 54px)";
   const iconPath = createSvgElement("path");
   iconPath.setAttribute("d", option.icon);
   iconPath.setAttribute("fill", "none");
@@ -225,7 +225,7 @@ const createCard = (
 
   const label = createElement();
   label.style.cssText = `
-    font-size: 15px;
+    font-size: var(--upgrade-card-label-size, 15px);
     text-align: center;
     line-height: 1.2;
     max-width: 120px;

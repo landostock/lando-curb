@@ -46,8 +46,7 @@ export const initMenuBackground = (): void => {
   document.body.insertBefore(menuBackground, gameoverWrapper);
   menuBackground.style.display = "none";
   menuBackground.style.opacity = "0";
-  menuBackground.style.clipPath =
-    "polygon(0 0, calc(20dvw + 400px) 0, calc(20dvw + 350px) 100%, 0 100%)";
+  menuBackground.style.clipPath = menuStageClipPath();
 };
 
 let pointerEventsTimer: ReturnType<typeof setTimeout> | undefined;
@@ -88,8 +87,22 @@ const isCompactLandscapeMenu = (): boolean => {
   return height <= 560 && width > height;
 };
 
+const menuStageWidth = (): number => {
+  const width = document.body.clientWidth || innerWidth;
+  const compact = isCompactLandscapeMenu();
+  if (compact) return Math.min(width - 32, Math.max(720, width * 0.74));
+  return Math.min(width - 32, Math.max(760, width * 0.2 + 430));
+};
+
+const menuStageClipPath = (): string => {
+  const stage = menuStageWidth();
+  const slope = isCompactLandscapeMenu() ? 72 : 50;
+  return `polygon(0 0, ${stage}px 0, ${Math.max(0, stage - slope)}px 100%, 0 100%)`;
+};
+
 const applyMenuLayout = (): void => {
   const compact = isCompactLandscapeMenu();
+  const safeStageContentWidth = Math.max(360, menuStageWidth() - 108);
   menuWrapper.style.padding = compact
     ? "calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-right, 0px) + 36px) calc(env(safe-area-inset-bottom, 0px) + 12px) calc(env(safe-area-inset-left, 0px) + 44px)"
     : "10vmin";
@@ -121,7 +134,7 @@ const applyMenuLayout = (): void => {
   menuButtons.style.gap = compact ? "10px" : "12px";
   menuButtons.style.marginTop = compact ? "18px" : "34px";
   menuButtons.style.width = compact
-    ? "min(680px, calc(var(--app-width, 100vw) - 96px))"
+    ? `${Math.min(680, safeStageContentWidth)}px`
     : "";
   menuButtons.style.maxWidth = compact ? "680px" : "";
 
@@ -134,6 +147,7 @@ const applyMenuLayout = (): void => {
   }
 
   menuText1.style.display = compact ? "none" : "";
+  menuBackground.style.clipPath = menuStageClipPath();
 };
 
 const updateChallengeButtons = (): void => {
@@ -658,7 +672,7 @@ export const showMenu = (
   applyMenuLayout();
   menuWrapper.style.pointerEvents = "none";
   updateChallengeButtons();
-  menuBackground.style.clipPath = `polygon(0 0, calc(20dvw + 400px) 0, calc(20dvw + 350px) 100%, 0 100%)`;
+  menuBackground.style.clipPath = menuStageClipPath();
   menuBackground.style.transition = `clip-path 1s, opacity 2s`;
   menuLogo.style.transition = `opacity .5s .8s`;
   menuHeader.style.transition = `opacity .5s 1s`;

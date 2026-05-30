@@ -52,19 +52,19 @@ const RIGHT_CONTROL_BOTTOM = 16;
 const RIGHT_CONTROL_SLOT = 56;
 
 const rightControlBottom = (slot: number): string =>
-  `calc(env(safe-area-inset-bottom, 0px) + ${RIGHT_CONTROL_BOTTOM + slot * RIGHT_CONTROL_SLOT}px)`;
+  `calc(env(safe-area-inset-bottom, 0px) + var(--right-slot-${slot}, ${RIGHT_CONTROL_BOTTOM + slot * RIGHT_CONTROL_SLOT}px))`;
 
-const safeBottomOffset = (offset: number): string =>
-  `calc(env(safe-area-inset-bottom, 0px) + ${offset}px)`;
+const safeBottomCss = (offset: string): string =>
+  `calc(env(safe-area-inset-bottom, 0px) + ${offset})`;
 
-const safeTopOffset = (offset: number): string =>
-  `calc(env(safe-area-inset-top, 0px) + ${offset}px)`;
+const safeTopCss = (offset: string): string =>
+  `calc(env(safe-area-inset-top, 0px) + ${offset})`;
 
-const safeLeftOffset = (offset: number): string =>
-  `calc(env(safe-area-inset-left, 0px) + ${offset}px)`;
+const safeLeftCss = (offset: string): string =>
+  `calc(env(safe-area-inset-left, 0px) + ${offset})`;
 
-const safeRightOffset = (offset: number): string =>
-  `calc(env(safe-area-inset-right, 0px) + ${offset}px)`;
+const safeRightCss = (offset: string): string =>
+  `calc(env(safe-area-inset-right, 0px) + ${offset})`;
 
 const setRightControlSlot = (
   button: HTMLElement,
@@ -92,8 +92,10 @@ const layoutRightControls = (): void => {
 
 const updateHomeActionPosition = (): void => {
   const bridgeSlotVisible = lakes.length > 0 || session.bridges > 0;
-  homeActionIndicator.style.bottom = safeBottomOffset(
-    bridgeSlotVisible ? 308 : 212,
+  homeActionIndicator.style.bottom = safeBottomCss(
+    bridgeSlotVisible
+      ? "var(--resource-slot-3, 308px)"
+      : "var(--resource-slot-2, 212px)",
   );
 };
 
@@ -467,6 +469,194 @@ export const initUi = () => {
   // body has user-select: none; to prevent text being highlighted.
   // ui black and shade colours inlined to make things smaller maybe
   styles.innerText = `
+    :root {
+      --hud-edge: 16px;
+      --score-top: 16px;
+      --score-left: 16px;
+      --score-padding-y: 6px;
+      --score-padding-x: 14px;
+      --score-gap: 8px;
+      --score-font: 20px;
+      --score-icon-size: 20px;
+      --clock-size: 80px;
+      --pause-size: 64px;
+      --pause-icon-size: 64px;
+      --pause-top: 24px;
+      --pause-right: 112px;
+      --pause-gap: 16px;
+      --tool-size: 48px;
+      --tool-icon-size: 48px;
+      --audio-icon-size: 42px;
+      --right-slot-0: 16px;
+      --right-slot-1: 72px;
+      --right-slot-2: 128px;
+      --right-slot-3: 184px;
+      --right-slot-4: 240px;
+      --right-slot-5: 296px;
+      --resource-size: 72px;
+      --resource-radius: 20px;
+      --resource-icon-size: 54px;
+      --resource-count-size: 28px;
+      --resource-count-border: 6px;
+      --resource-count-offset: 28px;
+      --resource-count-font: 18px;
+      --resource-slot-0: 20px;
+      --resource-slot-1: 116px;
+      --resource-slot-2: 212px;
+      --resource-slot-3: 308px;
+      --challenge-top: 74px;
+      --challenge-left: 16px;
+      --challenge-gap: 8px;
+      --challenge-size: 42px;
+      --challenge-icon-size: 29px;
+      --challenge-radius: 15px;
+      --challenge-columns: 1;
+      --upgrade-panel-width: min(780px, calc(var(--app-width, 100vw) - 48px));
+      --upgrade-panel-padding: 30px;
+      --upgrade-title-size: 38px;
+      --upgrade-copy-size: 16px;
+      --upgrade-grid-gap: 14px;
+      --upgrade-grid-margin: 24px;
+      --upgrade-card-min-height: 164px;
+      --upgrade-card-padding: 18px 14px;
+      --upgrade-card-radius: 18px;
+      --upgrade-icon-frame: 74px;
+      --upgrade-icon-radius: 22px;
+      --upgrade-icon-size: 54px;
+      --upgrade-card-label-size: 15px;
+      --home-action-bar-max: 560px;
+      --home-action-bar-side-clear: 28px;
+    }
+    @media (orientation: landscape) and (max-height: 700px), (max-width: 940px) and (max-height: 760px) {
+      :root {
+        --hud-edge: 14px;
+        --score-top: 12px;
+        --score-left: 90px;
+        --score-padding-y: 5px;
+        --score-padding-x: 12px;
+        --score-gap: 7px;
+        --score-font: 18px;
+        --score-icon-size: 18px;
+        --clock-size: 78px;
+        --pause-size: 48px;
+        --pause-icon-size: 46px;
+        --pause-top: 29px;
+        --pause-right: 105px;
+        --pause-gap: 13px;
+        --tool-size: 46px;
+        --tool-icon-size: 43px;
+        --audio-icon-size: 38px;
+        --right-slot-0: 14px;
+        --right-slot-1: 66px;
+        --right-slot-2: 118px;
+        --right-slot-3: 170px;
+        --right-slot-4: 222px;
+        --right-slot-5: 274px;
+        --resource-size: 56px;
+        --resource-radius: 16px;
+        --resource-icon-size: 42px;
+        --resource-count-size: 24px;
+        --resource-count-border: 5px;
+        --resource-count-offset: 22px;
+        --resource-count-font: 16px;
+        --resource-slot-0: 18px;
+        --resource-slot-1: 88px;
+        --resource-slot-2: 158px;
+        --resource-slot-3: 228px;
+        --challenge-top: 70px;
+        --challenge-left: 14px;
+        --challenge-gap: 5px;
+        --challenge-size: 34px;
+        --challenge-icon-size: 23px;
+        --challenge-radius: 12px;
+        --challenge-columns: 2;
+        --upgrade-panel-width: min(650px, max(360px, calc(var(--app-width, 100vw) - 236px)));
+        --upgrade-panel-padding: 22px;
+        --upgrade-title-size: 31px;
+        --upgrade-copy-size: 14px;
+        --upgrade-grid-gap: 11px;
+        --upgrade-grid-margin: 18px;
+        --upgrade-card-min-height: 124px;
+        --upgrade-card-padding: 13px 12px;
+        --upgrade-card-radius: 15px;
+        --upgrade-icon-frame: 58px;
+        --upgrade-icon-radius: 18px;
+        --upgrade-icon-size: 42px;
+        --upgrade-card-label-size: 13px;
+        --home-action-bar-max: 520px;
+        --home-action-bar-side-clear: 224px;
+      }
+    }
+    @media (orientation: landscape) and (max-height: 500px) {
+      :root {
+        --hud-edge: 12px;
+        --score-left: 90px;
+        --clock-size: 74px;
+        --pause-size: 46px;
+        --pause-icon-size: 44px;
+        --pause-top: 26px;
+        --pause-right: 99px;
+        --tool-size: 44px;
+        --tool-icon-size: 41px;
+        --audio-icon-size: 36px;
+        --right-slot-0: 12px;
+        --right-slot-1: 62px;
+        --right-slot-2: 112px;
+        --right-slot-3: 162px;
+        --right-slot-4: 212px;
+        --right-slot-5: 262px;
+        --resource-size: 52px;
+        --resource-radius: 15px;
+        --resource-icon-size: 39px;
+        --resource-count-size: 22px;
+        --resource-count-border: 5px;
+        --resource-count-offset: 20px;
+        --resource-count-font: 15px;
+        --resource-slot-0: 14px;
+        --resource-slot-1: 78px;
+        --resource-slot-2: 142px;
+        --resource-slot-3: 206px;
+        --challenge-top: 70px;
+        --challenge-size: 33px;
+        --challenge-icon-size: 22px;
+        --challenge-columns: 3;
+        --upgrade-panel-width: min(620px, max(340px, calc(var(--app-width, 100vw) - 224px)));
+        --upgrade-panel-padding: 18px;
+        --upgrade-title-size: 28px;
+        --upgrade-card-min-height: 112px;
+        --upgrade-icon-frame: 52px;
+        --upgrade-icon-size: 38px;
+      }
+    }
+    @media (orientation: portrait) and (max-width: 820px) {
+      :root {
+        --hud-edge: 14px;
+        --score-top: 14px;
+        --score-left: 14px;
+        --clock-size: 74px;
+        --pause-size: 48px;
+        --pause-icon-size: 46px;
+        --pause-top: 27px;
+        --pause-right: 101px;
+        --tool-size: 46px;
+        --resource-size: 58px;
+        --resource-radius: 17px;
+        --resource-icon-size: 43px;
+        --resource-count-size: 24px;
+        --resource-count-border: 5px;
+        --resource-count-offset: 23px;
+        --resource-slot-0: 18px;
+        --resource-slot-1: 92px;
+        --resource-slot-2: 166px;
+        --resource-slot-3: 240px;
+        --challenge-top: 70px;
+        --challenge-size: 36px;
+        --challenge-icon-size: 24px;
+        --upgrade-panel-width: min(640px, calc(var(--app-width, 100vw) - 32px));
+        --upgrade-panel-padding: 22px;
+        --upgrade-title-size: 31px;
+      }
+    }
     html {
       margin: 0;
       width: 100%;
@@ -562,10 +752,11 @@ export const initUi = () => {
     }
     .challenge-hud {
       position: absolute;
-      top: calc(env(safe-area-inset-top, 0px) + 74px);
-      left: calc(env(safe-area-inset-left, 0px) + 16px);
+      top: calc(env(safe-area-inset-top, 0px) + var(--challenge-top));
+      left: calc(env(safe-area-inset-left, 0px) + var(--challenge-left));
       display: grid;
-      gap: 8px;
+      grid-template-columns: repeat(var(--challenge-columns), var(--challenge-size));
+      gap: var(--challenge-gap);
       opacity: 0;
       pointer-events: none;
       transition: opacity .32s ease;
@@ -575,11 +766,11 @@ export const initUi = () => {
       position: relative;
       display: grid;
       place-items: center;
-      width: 42px;
-      height: 42px;
+      width: var(--challenge-size);
+      height: var(--challenge-size);
       box-sizing: border-box;
       border: 2px solid rgba(68,68,51,.16);
-      border-radius: 15px;
+      border-radius: var(--challenge-radius);
       background:
         linear-gradient(135deg, rgba(255,255,255,.96), rgba(247,247,240,.9));
       box-shadow:
@@ -596,6 +787,10 @@ export const initUi = () => {
       box-shadow:
         0 12px 30px rgba(0,0,0,.12),
         inset 0 0 0 1px rgba(255,255,255,.86);
+    }
+    .challenge-hud-item svg {
+      width: var(--challenge-icon-size) !important;
+      height: var(--challenge-icon-size) !important;
     }
     .challenge-hud-tooltip {
       position: absolute;
@@ -644,17 +839,7 @@ export const initUi = () => {
     }
     @media (max-height: 560px) {
       .challenge-hud {
-        top: calc(env(safe-area-inset-top, 0px) + 68px);
-        gap: 6px;
-      }
-      .challenge-hud-item {
-        width: 38px;
-        height: 38px;
-        border-radius: 13px;
-      }
-      .challenge-hud-item svg {
-        width: 24px !important;
-        height: 24px !important;
+        max-height: calc(var(--app-height, 100dvh) - 152px);
       }
       .challenge-hud-tooltip {
         left: 46px;
@@ -676,15 +861,15 @@ export const initUi = () => {
   scoreCounters.style.cssText = `
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--score-gap);
     position: absolute;
-    top: ${safeTopOffset(16)};
-    left: ${safeLeftOffset(16)};
-    padding: 6px 14px;
+    top: ${safeTopCss("var(--score-top)")};
+    left: ${safeLeftCss("var(--score-left)")};
+    padding: var(--score-padding-y) var(--score-padding-x);
     border-radius: 64px;
     background: ${colors.ui};
     color: #eee;
-    font-size: 20px;
+    font-size: var(--score-font);
     cursor: pointer;
     pointer-events: none;
     touch-action: manipulation;
@@ -694,8 +879,8 @@ export const initUi = () => {
 
   const pinSvg = createSvgElement("svg");
   pinSvg.setAttribute("viewBox", "0 0 12 12");
-  pinSvg.style.width = "20px";
-  pinSvg.style.height = "20px";
+  pinSvg.style.width = "var(--score-icon-size)";
+  pinSvg.style.height = "var(--score-icon-size)";
   const pinPath = createSvgElement("path");
   pinPath.setAttribute("d", "m6 11-3-3a4.24 4.24 0 1 1 6 0Z");
   pinPath.setAttribute("fill", "#fff");
@@ -710,8 +895,8 @@ export const initUi = () => {
   clock.style.cssText = `
     position: absolute;
     display: grid;
-    top: ${safeTopOffset(16)};
-    right: ${safeRightOffset(16)};
+    top: ${safeTopCss("var(--hud-edge)")};
+    right: ${safeRightCss("var(--hud-edge)")};
     place-items: center;
     border-radius: 64px;
     background: ${colors.ui};
@@ -719,8 +904,8 @@ export const initUi = () => {
     pointer-events: none;
     touch-action: manipulation
   `;
-  clock.style.width = "80px";
-  clock.style.height = "80px";
+  clock.style.width = "var(--clock-size)";
+  clock.style.height = "var(--clock-size)";
   clock.style.opacity = "0";
   clock.style.transition = `opacity 1s`;
 
@@ -728,8 +913,8 @@ export const initUi = () => {
   clockSvg.setAttribute("stroke-linejoin", "round");
   clockSvg.setAttribute("stroke-linecap", "round");
   clockSvg.setAttribute("viewBox", "0 0 16 16");
-  clockSvg.style.width = "80px";
-  clockSvg.style.height = "80px";
+  clockSvg.style.width = "var(--clock-size)";
+  clockSvg.style.height = "var(--clock-size)";
 
   for (let i = 0; i < 12; i++) {
     const group = createSvgElement("g");
@@ -791,33 +976,33 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: ${safeBottomOffset(20)};
-    left: ${safeLeftOffset(20)};
-    border-radius: 20px;
+    bottom: ${safeBottomCss("var(--resource-slot-0)")};
+    left: ${safeLeftCss("var(--hud-edge)")};
+    border-radius: var(--resource-radius);
     background: ${colors.ui};
   `;
   pathTilesIndicator.style.transform = "rotate(-45deg)";
   pathTilesIndicator.style.opacity = "0";
   pathTilesIndicator.style.transition = `scale .4s cubic-bezier(.5, 2, .5, 1), opacity 1s`;
-  pathTilesIndicator.style.width = "72px";
-  pathTilesIndicator.style.height = "72px";
+  pathTilesIndicator.style.width = "var(--resource-size)";
+  pathTilesIndicator.style.height = "var(--resource-size)";
   pathTilesIndicatorCount.style.cssText = `
     position: absolute;
     display: grid;
     place-items: center;
     border-radius: 64px;
-    border: 6px solid ${colors.ui};
-    transform: translate(28px,28px) rotate(45deg);
-    font-size: 18px;
+    border: var(--resource-count-border) solid ${colors.ui};
+    transform: translate(var(--resource-count-offset), var(--resource-count-offset)) rotate(45deg);
+    font-size: var(--resource-count-font);
     background: #eee;
     transition: all .5s;
   `;
-  pathTilesIndicatorCount.style.width = "28px";
-  pathTilesIndicatorCount.style.height = "28px";
+  pathTilesIndicatorCount.style.width = "var(--resource-count-size)";
+  pathTilesIndicatorCount.style.height = "var(--resource-count-size)";
   const pathTilesSvg = createSvgElement("svg");
   pathTilesSvg.setAttribute("viewBox", "0 0 18 18");
-  pathTilesSvg.style.width = "54px";
-  pathTilesSvg.style.height = "54px";
+  pathTilesSvg.style.width = "var(--resource-icon-size)";
+  pathTilesSvg.style.height = "var(--resource-icon-size)";
   pathTilesSvg.style.transform = "rotate(45deg)";
   const pathTilesSvgPath = createSvgElement("path");
   pathTilesSvgPath.setAttribute("fill", "none");
@@ -833,8 +1018,8 @@ export const initUi = () => {
 
   const pauseSvg = createSvgElement("svg");
   pauseSvg.setAttribute("viewBox", "0 0 16 16");
-  pauseSvg.setAttribute("width", String(64));
-  pauseSvg.setAttribute("height", String(64));
+  pauseSvg.style.width = "var(--pause-icon-size)";
+  pauseSvg.style.height = "var(--pause-icon-size)";
   pauseSvgPath.setAttribute("fill", colors.ui);
   pauseSvgPath.setAttribute("stroke", colors.ui);
   pauseSvgPath.setAttribute("stroke-width", String(2));
@@ -848,19 +1033,19 @@ export const initUi = () => {
 
   pauseButton.style.cssText = `position:absolute;padding:0;pointer-events:all`;
   const layoutPauseButton = () => {
-    pauseButton.style.top = safeTopOffset(24);
-    pauseButton.style.right = safeRightOffset(112);
+    pauseButton.style.top = safeTopCss("var(--pause-top)");
+    pauseButton.style.right = safeRightCss("var(--pause-right)");
   };
   layoutPauseButton();
   addEventListener("resize", layoutPauseButton);
-  pauseButton.style.width = "64px";
-  pauseButton.style.height = "64px";
+  pauseButton.style.width = "var(--pause-size)";
+  pauseButton.style.height = "var(--pause-size)";
   pauseButton.style.opacity = "0";
   pauseButton.append(pauseSvg);
 
   gridRedToggleSvg.setAttribute("viewBox", "0 0 16 16");
-  gridRedToggleSvg.setAttribute("width", String(48));
-  gridRedToggleSvg.setAttribute("height", String(48));
+  gridRedToggleSvg.style.width = "var(--tool-icon-size)";
+  gridRedToggleSvg.style.height = "var(--tool-icon-size)";
   gridRedToggleSvgPath.setAttribute("fill", "none");
   gridRedToggleSvgPath.setAttribute("stroke", colors.red);
   gridRedToggleSvgPath.setAttribute("stroke-width", String(1.45));
@@ -874,15 +1059,15 @@ export const initUi = () => {
   gridRedToggleButton.style.cssText = `
     position:absolute;
     bottom:${rightControlBottom(3)};
-    right:${safeRightOffset(16)};
+    right:${safeRightCss("var(--hud-edge)")};
     padding:0;
     pointer-events:all;
     display:grid;
     place-items:center;
     background:#fff8f5;
   `;
-  gridRedToggleButton.style.width = "48px";
-  gridRedToggleButton.style.height = "48px";
+  gridRedToggleButton.style.width = "var(--tool-size)";
+  gridRedToggleButton.style.height = "var(--tool-size)";
   gridRedToggleButton.style.opacity = "0";
   gridRedToggleButton.style.pointerEvents = "none";
   gridRedToggleButton.style.boxShadow = `0 0 0 1px ${colors.red}12, 0 8px 18px ${colors.shade}`;
@@ -891,7 +1076,7 @@ export const initUi = () => {
   gridRedToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
-    right: ${safeRightOffset(16)};
+    right: ${safeRightCss("var(--hud-edge)")};
     align-items: center;
     color: #eee;
     font-size: 16px;
@@ -902,14 +1087,14 @@ export const initUi = () => {
     bottom: ${rightControlBottom(3)};
     background: ${colors.red};
   `;
-  gridRedToggleTooltip.style.height = "48px";
+  gridRedToggleTooltip.style.height = "var(--tool-size)";
   gridRedToggleTooltip.style.width = "116px";
   gridRedToggleTooltip.style.opacity = "0";
   gridRedToggleTooltip.style.transition = `all .5s`;
 
   gridToggleSvg.setAttribute("viewBox", "0 0 16 16");
-  gridToggleSvg.setAttribute("width", String(48));
-  gridToggleSvg.setAttribute("height", String(48));
+  gridToggleSvg.style.width = "var(--tool-icon-size)";
+  gridToggleSvg.style.height = "var(--tool-icon-size)";
   gridToggleSvgPath.setAttribute("fill", "none");
   gridToggleSvgPath.setAttribute("stroke", colors.ui);
   gridToggleSvgPath.setAttribute("stroke-width", String(2));
@@ -919,15 +1104,15 @@ export const initUi = () => {
   gridToggleSvgPath.style.transformOrigin = "center";
   gridToggleSvg.append(gridToggleSvgPath);
   gridToggleButton.append(gridToggleSvg);
-  gridToggleButton.style.cssText = `position:absolute;bottom:${rightControlBottom(4)};right:${safeRightOffset(16)};padding:0;pointer-events:all;`;
-  gridToggleButton.style.width = "48px";
-  gridToggleButton.style.height = "48px";
+  gridToggleButton.style.cssText = `position:absolute;bottom:${rightControlBottom(4)};right:${safeRightCss("var(--hud-edge)")};padding:0;pointer-events:all;`;
+  gridToggleButton.style.width = "var(--tool-size)";
+  gridToggleButton.style.height = "var(--tool-size)";
   gridToggleButton.style.opacity = "0";
   gridToggleButton.style.pointerEvents = "none";
   gridToggleTooltip.style.cssText = `
     position: absolute;
     display: flex;
-    right: ${safeRightOffset(16)};
+    right: ${safeRightCss("var(--hud-edge)")};
     align-items: center;
     color: #eee;
     font-size: 16px;
@@ -938,14 +1123,14 @@ export const initUi = () => {
     bottom: ${rightControlBottom(4)};
     background: ${colors.ui};
   `;
-  gridToggleTooltip.style.height = "48px";
+  gridToggleTooltip.style.height = "var(--tool-size)";
   gridToggleTooltip.style.width = "96px";
   gridToggleTooltip.style.opacity = "0";
   gridToggleTooltip.style.transition = `all .5s`;
 
   audioModeSvg.setAttribute("viewBox", "0 0 16 16");
-  audioModeSvg.setAttribute("width", String(42));
-  audioModeSvg.setAttribute("height", String(42));
+  audioModeSvg.style.width = "var(--audio-icon-size)";
+  audioModeSvg.style.height = "var(--audio-icon-size)";
   audioModeSvgPath.setAttribute("fill", "none");
   audioModeSvgPath.setAttribute("stroke", colors.ui);
   audioModeSvgPath.setAttribute("stroke-width", String(1.35));
@@ -957,14 +1142,14 @@ export const initUi = () => {
   audioModeButton.style.cssText = `
     position:absolute;
     bottom:${rightControlBottom(2)};
-    right:${safeRightOffset(16)};
+    right:${safeRightCss("var(--hud-edge)")};
     padding:0;
     pointer-events:all;
     display:grid;
     place-items:center;
   `;
-  audioModeButton.style.width = "48px";
-  audioModeButton.style.height = "48px";
+  audioModeButton.style.width = "var(--tool-size)";
+  audioModeButton.style.height = "var(--tool-size)";
   audioModeButton.style.opacity = "0";
   audioModeButton.style.pointerEvents = "none";
   audioModeButton.style.boxShadow = `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
@@ -974,7 +1159,7 @@ export const initUi = () => {
   developerModeButton.style.cssText = `
     position:absolute;
     bottom:${rightControlBottom(4)};
-    right:${safeRightOffset(16)};
+    right:${safeRightCss("var(--hud-edge)")};
     padding:0;
     pointer-events:all;
     display:grid;
@@ -984,8 +1169,8 @@ export const initUi = () => {
     letter-spacing:0;
     z-index:5;
   `;
-  developerModeButton.style.width = "48px";
-  developerModeButton.style.height = "48px";
+  developerModeButton.style.width = "var(--tool-size)";
+  developerModeButton.style.height = "var(--tool-size)";
   developerModeButton.style.opacity = "0";
   developerModeButton.style.visibility = "hidden";
   developerModeButton.style.pointerEvents = "none";
@@ -997,18 +1182,18 @@ export const initUi = () => {
   helpButton.style.cssText = `
     position:absolute;
     bottom:${rightControlBottom(0)};
-    right:${safeRightOffset(16)};
+    right:${safeRightCss("var(--hud-edge)")};
     padding:0;
     pointer-events:all;
     display:grid;
     place-items:center;
     background:#f7f7f0;
-    font-size:28px;
+    font-size:calc(var(--tool-size) * .58);
     line-height:1;
     z-index:30;
   `;
-  helpButton.style.width = "48px";
-  helpButton.style.height = "48px";
+  helpButton.style.width = "var(--tool-size)";
+  helpButton.style.height = "var(--tool-size)";
   helpButton.style.opacity = "1";
   helpButton.style.boxShadow = `0 0 0 1px ${colors.shade2}, 0 8px 24px ${colors.shade}`;
   helpButton.innerText = "?";
@@ -1234,9 +1419,9 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: ${safeBottomOffset(116)};
-	  left: ${safeLeftOffset(20)};
-	  border-radius: 20px;
+    bottom: ${safeBottomCss("var(--resource-slot-1)")};
+	  left: ${safeLeftCss("var(--hud-edge)")};
+	  border-radius: var(--resource-radius);
 	  background: ${colors.ui};
 	  cursor: default;
 	  pointer-events: none;
@@ -1244,26 +1429,26 @@ export const initUi = () => {
   motorwayIndicator.style.transform = "rotate(-45deg)";
   motorwayIndicator.style.opacity = "0";
   motorwayIndicator.style.transition = `scale .4s cubic-bezier(.5, 2, .5, 1), opacity 1s, background .2s`;
-  motorwayIndicator.style.width = "72px";
-  motorwayIndicator.style.height = "72px";
+  motorwayIndicator.style.width = "var(--resource-size)";
+  motorwayIndicator.style.height = "var(--resource-size)";
   motorwayIndicatorCount.style.cssText = `
     position: absolute;
     display: grid;
     place-items: center;
     border-radius: 64px;
-    border: 6px solid ${colors.ui};
-    transform: translate(28px,28px) rotate(45deg);
-    font-size: 18px;
+    border: var(--resource-count-border) solid ${colors.ui};
+    transform: translate(var(--resource-count-offset), var(--resource-count-offset)) rotate(45deg);
+    font-size: var(--resource-count-font);
     background: #eee;
     transition: all .5s;
   `;
-  motorwayIndicatorCount.style.width = "28px";
-  motorwayIndicatorCount.style.height = "28px";
+  motorwayIndicatorCount.style.width = "var(--resource-count-size)";
+  motorwayIndicatorCount.style.height = "var(--resource-count-size)";
   motorwayIndicatorCount.innerText = "0";
   const motorwaySvg = createSvgElement("svg");
   motorwaySvg.setAttribute("viewBox", "0 0 18 18");
-  motorwaySvg.style.width = "54px";
-  motorwaySvg.style.height = "54px";
+  motorwaySvg.style.width = "var(--resource-icon-size)";
+  motorwaySvg.style.height = "var(--resource-icon-size)";
   motorwaySvg.style.transform = "rotate(45deg)";
   const motorwaySvgPath = createSvgElement("path");
   motorwaySvgPath.setAttribute("fill", "none");
@@ -1278,34 +1463,34 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    bottom: ${safeBottomOffset(212)};
-    left: ${safeLeftOffset(20)};
-    border-radius: 20px;
+    bottom: ${safeBottomCss("var(--resource-slot-2)")};
+    left: ${safeLeftCss("var(--hud-edge)")};
+    border-radius: var(--resource-radius);
     background: ${colors.ui};
   `;
   bridgeIndicator.style.transform = "rotate(-45deg)";
   bridgeIndicator.style.opacity = "0";
   bridgeIndicator.style.transition = `scale .4s cubic-bezier(.5, 2, .5, 1), opacity 1s`;
-  bridgeIndicator.style.width = "72px";
-  bridgeIndicator.style.height = "72px";
+  bridgeIndicator.style.width = "var(--resource-size)";
+  bridgeIndicator.style.height = "var(--resource-size)";
   bridgeIndicatorCount.style.cssText = `
     position: absolute;
     display: grid;
     place-items: center;
     border-radius: 64px;
-    border: 6px solid ${colors.ui};
-    transform: translate(28px,28px) rotate(45deg);
-    font-size: 18px;
+    border: var(--resource-count-border) solid ${colors.ui};
+    transform: translate(var(--resource-count-offset), var(--resource-count-offset)) rotate(45deg);
+    font-size: var(--resource-count-font);
     background: #eee;
     transition: all .5s;
   `;
-  bridgeIndicatorCount.style.width = "28px";
-  bridgeIndicatorCount.style.height = "28px";
+  bridgeIndicatorCount.style.width = "var(--resource-count-size)";
+  bridgeIndicatorCount.style.height = "var(--resource-count-size)";
   bridgeIndicatorCount.innerText = "0";
   const bridgeSvg = createSvgElement("svg");
   bridgeSvg.setAttribute("viewBox", "0 0 18 18");
-  bridgeSvg.style.width = "54px";
-  bridgeSvg.style.height = "54px";
+  bridgeSvg.style.width = "var(--resource-icon-size)";
+  bridgeSvg.style.height = "var(--resource-icon-size)";
   bridgeSvg.style.transform = "rotate(45deg)";
   const bridgeSvgPath = createSvgElement("path");
   bridgeSvgPath.setAttribute("fill", "none");
@@ -1320,8 +1505,8 @@ export const initUi = () => {
     position: absolute;
     display: grid;
     place-items: center;
-    left: ${safeLeftOffset(20)};
-    border-radius: 20px;
+    left: ${safeLeftCss("var(--hud-edge)")};
+    border-radius: var(--resource-radius);
     background: #f7f7f0;
     cursor: pointer;
     pointer-events: all;
@@ -1331,8 +1516,8 @@ export const initUi = () => {
   homeActionIndicator.style.transform = "rotate(-45deg)";
   homeActionIndicator.style.opacity = "0";
   homeActionIndicator.style.transition = `scale .4s cubic-bezier(.5, 2, .5, 1), opacity 1s, background .2s`;
-  homeActionIndicator.style.width = "72px";
-  homeActionIndicator.style.height = "72px";
+  homeActionIndicator.style.width = "var(--resource-size)";
+  homeActionIndicator.style.height = "var(--resource-size)";
   homeActionIndicator.title = "Home Action";
   homeActionIndicator.setAttribute("aria-label", "Home Action");
   homeActionIndicatorCount.style.cssText = `
@@ -1340,19 +1525,19 @@ export const initUi = () => {
     display: grid;
     place-items: center;
     border-radius: 64px;
-    border: 6px solid ${colors.ui};
-    transform: translate(28px,28px) rotate(45deg);
-    font-size: 18px;
+    border: var(--resource-count-border) solid ${colors.ui};
+    transform: translate(var(--resource-count-offset), var(--resource-count-offset)) rotate(45deg);
+    font-size: var(--resource-count-font);
     background: #eee;
     transition: all .5s;
   `;
-  homeActionIndicatorCount.style.width = "28px";
-  homeActionIndicatorCount.style.height = "28px";
+  homeActionIndicatorCount.style.width = "var(--resource-count-size)";
+  homeActionIndicatorCount.style.height = "var(--resource-count-size)";
   homeActionIndicatorCount.innerText = "0";
   const homeActionSvg = createSvgElement("svg");
   homeActionSvg.setAttribute("viewBox", "0 0 18 18");
-  homeActionSvg.style.width = "54px";
-  homeActionSvg.style.height = "54px";
+  homeActionSvg.style.width = "var(--resource-icon-size)";
+  homeActionSvg.style.height = "var(--resource-icon-size)";
   homeActionSvg.style.transform = "rotate(45deg)";
   const homeActionSvgPath = createSvgElement("path");
   homeActionSvgPath.setAttribute("fill", "none");
